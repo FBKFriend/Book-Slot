@@ -1,9 +1,15 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 
-void main() => runApp(const BookSlotApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  debugPrint('Firebase connected: ${Firebase.app().options.projectId}');
+  runApp(const BookSlotApp());
+}
 
 class BookSlotApp extends StatelessWidget {
   const BookSlotApp({super.key});
