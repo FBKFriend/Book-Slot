@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'theme/app_theme.dart';
+import 'screens/splash_screen.dart';
 
 void main() => runApp(const BookSlotApp());
 
@@ -13,7 +14,7 @@ class BookSlotApp extends StatelessWidget {
       title: 'BOOKSLOT',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const ThemeTestScreen(),
+      home: const SplashScreen(next: ThemeTestScreen()),
     );
   }
 }
