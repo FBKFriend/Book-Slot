@@ -2,6 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/app_user.dart';
 
+class AccountExistsException implements Exception {
+  const AccountExistsException();
+}
+
 class UserService {
   UserService._();
   static final UserService instance = UserService._();
@@ -49,13 +53,61 @@ class UserService {
   Future<void> deleteUser(String email) =>
       _db.collection('users').doc(email.toLowerCase()).delete();
 
+  static Map<String, Object?> nameFields(
+    String first,
+    String middle,
+    String last,
+  ) {
+    final f = first.trim(), m = middle.trim(), l = last.trim();
+    return {
+      'firstName': f,
+      'middleName': m,
+      'lastName': l,
+      'fullName': [f, m, l].where((s) => s.isNotEmpty).join(' '),
+    };
+  }
+
+  /// Superadmin adds a librarian. Throws AccountExistsException on duplicates.
+  Future<void> addLibrarian({
+    required String email,
+    required String first,
+    required String middle,
+    required String last,
+  }) {
+    final id = email.trim().toLowerCase();
+    final ref = _db.collection('users').doc(id);
+    return _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (snap.exists) throw const AccountExistsException();
+      tx.set(ref, {
+        'email': id,
+        'role': 'librarian',
+        'status': 'active',
+        ...nameFields(first, middle, last),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  Future<void> authorize(String email) =>
+      _db.collection('users').doc(email.toLowerCase()).update({
+        'status': 'active',
+        'authorizedAt': FieldValue.serverTimestamp(),
+      });
+
+  Future<void> setRole(String email, String role) =>
+      _db.collection('users').doc(email.toLowerCase()).update({'role': role});
+
+  Future<void> updateInfo(String email, Map<String, Object?> fields) =>
+      _db.collection('users').doc(email.toLowerCase()).update(fields);
+
   /// TESTING ONLY: creates fake students. Remove before release.
   Future<void> seedSampleStudents() async {
     final samples = [
       {
         'email': 'maria.santos@example.com',
         'fullName': 'Maria Clara Santos',
-        'studentId': '2026-0001',
+        'studentId': 'GC-260001',
         'age': 19,
         'sex': 'Female',
         'course': 'BSIT',
@@ -64,7 +116,7 @@ class UserService {
       {
         'email': 'juan.reyes@example.com',
         'fullName': 'Juan Miguel Reyes',
-        'studentId': '2026-0002',
+        'studentId': 'GC-260002',
         'age': 20,
         'sex': 'Male',
         'course': 'BSCS',
@@ -73,7 +125,7 @@ class UserService {
       {
         'email': 'ana.lopez@example.com',
         'fullName': 'Ana Beatriz Lopez',
-        'studentId': '2025-0148',
+        'studentId': 'GC-250148',
         'age': 21,
         'sex': 'Female',
         'course': 'BSIT',
@@ -82,7 +134,7 @@ class UserService {
       {
         'email': 'very.long.email.address.for.testing.ellipsis@example.com',
         'fullName': 'Maximilian Bartholomew Fernandez-Villanueva',
-        'studentId': '2025-0099',
+        'studentId': 'GC-250099',
         'age': 22,
         'sex': 'Male',
         'course': 'BSIT',
@@ -95,6 +147,8 @@ class UserService {
         ...s,
         'role': 'student',
         'createdAt': FieldValue.serverTimestamp(),
+        if (s['status'] != 'pending')
+          'authorizedAt': FieldValue.serverTimestamp(),
       });
     }
     await batch.commit();

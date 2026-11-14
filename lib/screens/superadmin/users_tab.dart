@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'user_forms.dart';
 import '../../models/app_user.dart';
 import '../../services/user_service.dart';
 import '../../theme/app_colors.dart';
@@ -18,6 +19,11 @@ class UsersTab extends StatelessWidget {
         appBar: AppBar(
           title: const Text('User Management'),
           actions: [
+            IconButton(
+              tooltip: 'Add authorized account',
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              onPressed: () => showAddLibrarianSheet(context),
+            ),
             if (kDebugMode)
               IconButton(
                 tooltip: 'Add sample students (testing)',

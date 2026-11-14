@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'user_forms.dart';
 import '../../models/app_user.dart';
 import '../../services/user_service.dart';
 import '../../theme/app_colors.dart';
@@ -110,18 +111,51 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                         _InfoRow('Sex', u.sex),
                         _InfoRow('Course', u.course),
                       ],
-                      _InfoRow('Registered', _date(u.createdAt)),
+                      if (u.role == 'student') ...[
+                        _InfoRow('Registered', _date(u.createdAt)),
+                        _InfoRow('Authorized', _date(u.authorizedAt)),
+                      ] else
+                        _InfoRow('Date created', _date(u.createdAt)),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 24),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+                onPressed: () => showEditUserSheet(context, u),
+                child: const Text('Edit information'),
+              ),
+              const SizedBox(height: 12),
               ..._actions(u),
+              if (u.status != 'pending') ...[
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => _changeRole(u),
+                  child: Text(
+                    u.role == 'student' ? 'Make librarian' : 'Make student',
+                  ),
+                ),
+              ],
             ],
           );
         },
       ),
     );
+  }
+
+  Future<void> _changeRole(AppUser u) async {
+    final newRole = u.role == 'student' ? 'librarian' : 'student';
+    final ok = await _confirm(
+      'Change role?',
+      'This account will become a $newRole.',
+      'Change',
+    );
+    if (!ok) return;
+    await _run(() => UserService.instance.setRole(u.email, newRole));
   }
 
   List<Widget> _actions(AppUser u) {
@@ -130,7 +164,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
         return [
           ElevatedButton(
             onPressed: () =>
-                _run(() => UserService.instance.setStatus(u.email, 'active')),
+                _run(() => UserService.instance.authorize(u.email)),
             child: const Text('Authorize'),
           ),
           const SizedBox(height: 12),

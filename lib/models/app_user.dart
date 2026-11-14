@@ -9,6 +9,10 @@ class AppUser {
   final int? age;
   final String? sex;
   final String? course;
+  final String? firstName;
+  final String? middleName;
+  final String? lastName;
+  final DateTime? authorizedAt;
   final DateTime? createdAt;
 
   const AppUser({
@@ -21,6 +25,10 @@ class AppUser {
     this.sex,
     this.course,
     this.createdAt,
+    this.firstName,
+    this.middleName,
+    this.lastName,
+    this.authorizedAt,
   });
 
   factory AppUser.fromMap(String email, Map<String, dynamic> d) => AppUser(
@@ -33,5 +41,32 @@ class AppUser {
     sex: d['sex'] as String?,
     course: d['course'] as String?,
     createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
+    firstName: d['firstName'] as String?,
+    middleName: d['middleName'] as String?,
+    lastName: d['lastName'] as String?,
+    authorizedAt: (d['authorizedAt'] as Timestamp?)?.toDate(),
   );
+
+  /// Name parts for the edit form; falls back to splitting the full name.
+  ({String first, String middle, String last}) get nameParts {
+    if ((firstName ?? '').isNotEmpty || (lastName ?? '').isNotEmpty) {
+      return (
+        first: firstName ?? '',
+        middle: middleName ?? '',
+        last: lastName ?? '',
+      );
+    }
+    final words = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    if (words.isEmpty) return (first: '', middle: '', last: '');
+    if (words.length == 1) return (first: words.first, middle: '', last: '');
+    return (
+      first: words.first,
+      middle: words.sublist(1, words.length - 1).join(' '),
+      last: words.last,
+    );
+  }
 }
