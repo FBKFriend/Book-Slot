@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'dashboard_tab.dart';
 import 'users_tab.dart';
 import '../../models/app_user.dart';
 import '../../services/auth_service.dart';
@@ -17,7 +18,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
   int _index = 0;
 
   late final List<Widget> _pages = [
-    const _TabPlaceholder(title: 'System Dashboard'),
+    const DashboardTab(),
     const UsersTab(),
     const _TabPlaceholder(title: 'Reports & Analytics'),
     const _TabPlaceholder(title: 'Audit Logs'),

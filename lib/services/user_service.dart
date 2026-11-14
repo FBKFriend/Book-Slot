@@ -6,6 +6,17 @@ class AccountExistsException implements Exception {
   const AccountExistsException();
 }
 
+class UserCounts {
+  final int students; // authorized students (active or suspended)
+  final int pending;
+  final int librarians;
+  const UserCounts({
+    required this.students,
+    required this.pending,
+    required this.librarians,
+  });
+}
+
 class UserService {
   UserService._();
   static final UserService instance = UserService._();
@@ -43,6 +54,32 @@ class UserService {
           });
           return list;
         });
+  }
+
+  /// Live counts for the superadmin dashboard.
+  Stream<UserCounts> watchUserCounts() {
+    return _db.collection('users').snapshots().map((snap) {
+      var students = 0, pending = 0, librarians = 0;
+      for (final d in snap.docs) {
+        final data = d.data();
+        final role = data['role'];
+        final status = data['status'];
+        if (role == 'student') {
+          if (status == 'pending') {
+            pending++;
+          } else {
+            students++;
+          }
+        } else if (role == 'librarian') {
+          librarians++;
+        }
+      }
+      return UserCounts(
+        students: students,
+        pending: pending,
+        librarians: librarians,
+      );
+    });
   }
 
   Future<void> setStatus(String email, String status) => _db
