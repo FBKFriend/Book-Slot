@@ -1,3 +1,5 @@
+import 'account_gate.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -17,37 +19,8 @@ class AuthGate extends StatelessWidget {
         }
         final user = snapshot.data;
         if (user == null) return const LoginScreen();
-        return SignedInPlaceholder(user: user);
+        return AccountGate(user: user);
       },
-    );
-  }
-}
-
-class SignedInPlaceholder extends StatelessWidget {
-  final User user;
-  const SignedInPlaceholder({super.key, required this.user});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Signed in')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(user.displayName ?? 'No name', style: t.headlineMedium),
-            const SizedBox(height: 6),
-            Text(user.email ?? 'No email', style: t.bodyMedium),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => AuthService.instance.signOut(),
-              child: const Text('Sign out'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
