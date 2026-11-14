@@ -1,3 +1,5 @@
+import 'superadmin/superadmin_shell.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -51,7 +53,9 @@ class _AccountGateState extends State<AccountGate> {
         }
         switch (me.status) {
           case 'active':
-            return RoleHomePlaceholder(user: me);
+            return me.role == 'superadmin'
+                ? SuperAdminShell(user: me)
+                : RoleHomePlaceholder(user: me);
           case 'suspended':
             return const StatusScreen(
               icon: Icons.block,

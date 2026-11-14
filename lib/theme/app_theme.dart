@@ -88,6 +88,25 @@ class AppTheme {
         selectedItemColor: AppColors.gold,
         unselectedItemColor: AppColors.muted,
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: AppColors.gold.withValues(alpha: 0.18),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: selected ? AppColors.gold : AppColors.muted,
+          );
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            color: selected ? AppColors.gold : AppColors.muted,
+          );
+        }),
+      ),
     );
   }
 }
