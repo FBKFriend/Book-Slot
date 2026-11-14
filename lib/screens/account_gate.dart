@@ -3,6 +3,7 @@ import 'superadmin/superadmin_shell.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'librarian/librarian_shell.dart';
 import '../models/app_user.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
@@ -53,9 +54,14 @@ class _AccountGateState extends State<AccountGate> {
         }
         switch (me.status) {
           case 'active':
-            return me.role == 'superadmin'
-                ? SuperAdminShell(user: me)
-                : RoleHomePlaceholder(user: me);
+            switch (me.role) {
+              case 'superadmin':
+                return SuperAdminShell(user: me);
+              case 'librarian':
+                return LibrarianShell(user: me);
+              default:
+                return RoleHomePlaceholder(user: me);
+            }
           case 'suspended':
             return const StatusScreen(
               icon: Icons.block,
