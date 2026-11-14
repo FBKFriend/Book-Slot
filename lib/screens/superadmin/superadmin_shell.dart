@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'settings_tab.dart';
 import 'dashboard_tab.dart';
 import 'users_tab.dart';
 import '../../models/app_user.dart';
-import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 
 class SuperAdminShell extends StatefulWidget {
@@ -22,28 +22,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     const UsersTab(),
     const _TabPlaceholder(title: 'Reports & Analytics'),
     const _TabPlaceholder(title: 'Audit Logs'),
-    _TabPlaceholder(
-      title: 'System Settings',
-      children: [
-        const SizedBox(height: 20),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            widget.user.email,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: ElevatedButton(
-            onPressed: () => AuthService.instance.signOut(),
-            child: const Text('Sign out'),
-          ),
-        ),
-      ],
-    ),
+    SettingsTab(user: widget.user),
   ];
 
   @override
