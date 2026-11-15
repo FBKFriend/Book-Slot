@@ -61,3 +61,10 @@ String auditActionTitle(String action) {
       return action;
   }
 }
+
+const Map<String, String> kAuditActorOptions = {
+  'all': 'All',
+  'superadmin': 'SuperAdmin',
+  'student': 'Students',
+  'librarian': 'Librarians',
+};

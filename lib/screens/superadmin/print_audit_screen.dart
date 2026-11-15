@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
+import '../../models/audit_entry.dart';
 import '../../services/audit_pdf.dart';
 import '../../services/audit_service.dart';
 import '../../theme/app_colors.dart';
@@ -18,6 +19,7 @@ class PrintAuditScreen extends StatefulWidget {
 
 class _PrintAuditScreenState extends State<PrintAuditScreen> {
   String _preset = 'month';
+  String _entity = 'all';
   DateTime? _from;
   DateTime? _to;
   bool _busy = false;
@@ -68,13 +70,16 @@ class _PrintAuditScreenState extends State<PrintAuditScreen> {
     final r = resolveRange(_preset, from: _from, to: _to);
     setState(() => _busy = true);
     try {
-      final entries = await AuditService.instance.fetchRange(
+      final all = await AuditService.instance.fetchRange(
         start: r.start,
         endExclusive: r.endExclusive,
       );
+      final entries = _entity == 'all'
+          ? all
+          : all.where((e) => e.actorRole == _entity).toList();
       if (entries.isEmpty) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('No log entries in this period.')),
+          const SnackBar(content: Text('No log entries for this selection.')),
         );
         return;
       }
@@ -86,6 +91,7 @@ class _PrintAuditScreenState extends State<PrintAuditScreen> {
         entries: entries,
         periodLabel: _periodLabel(r),
         generatedBy: who,
+        doneByLabel: kAuditActorOptions[_entity]!,
       );
       await Printing.layoutPdf(
         name: 'bookslot-audit-log',
@@ -130,14 +136,24 @@ class _PrintAuditScreenState extends State<PrintAuditScreen> {
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilterDropdown(
-              label: 'Period',
-              value: _preset,
-              options: kDatePresetOptions,
-              onChanged: (v) => setState(() => _preset = v),
-            ),
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilterDropdown(
+                label: 'Show',
+                value: _entity,
+                options: kAuditActorOptions,
+                onChanged: (v) => setState(() => _entity = v),
+              ),
+              FilterDropdown(
+                label: 'Period',
+                value: _preset,
+                options: kDatePresetOptions,
+                onChanged: (v) => setState(() => _preset = v),
+              ),
+            ],
           ),
           if (_preset == 'custom') ...[
             const SizedBox(height: 16),

@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../utils/date_range.dart';
 import '../../utils/format.dart';
 import '../../widgets/filter_dropdown.dart';
+import '../../widgets/gold_range_picker.dart';
 import 'print_audit_screen.dart';
 
 class AuditTab extends StatefulWidget {
@@ -34,12 +35,11 @@ class _AuditTabState extends State<AuditTab> {
 
   Future<void> _pickCustom() async {
     final now = DateTime.now();
-    final picked = await showDateRangePicker(
-      context: context,
+    final picked = await showGoldDateRangePicker(
+      context,
       firstDate: DateTime(2025, 1, 1),
       lastDate: DateTime(now.year, now.month, now.day),
-      initialDateRange: _custom,
-      helpText: 'Select dates',
+      initialRange: _custom,
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -89,12 +89,7 @@ class _AuditTabState extends State<AuditTab> {
                   FilterDropdown(
                     label: 'Show',
                     value: _entity,
-                    options: const {
-                      'all': 'All',
-                      'superadmin': 'SuperAdmin',
-                      'student': 'Students',
-                      'librarian': 'Librarians',
-                    },
+                    options: kAuditActorOptions,
                     onChanged: (v) => setState(() => _entity = v),
                   ),
                   FilterDropdown(

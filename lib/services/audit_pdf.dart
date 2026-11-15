@@ -12,6 +12,7 @@ String _safe(String s) => s.replaceAll('→', '->');
 Future<Uint8List> buildAuditPdf({
   required List<AuditEntry> entries,
   required String periodLabel,
+  required String doneByLabel,
   required String generatedBy,
 }) async {
   final doc = pw.Document(title: 'BOOKSLOT Audit Log');
@@ -54,6 +55,7 @@ Future<Uint8List> buildAuditPdf({
         ),
         pw.SizedBox(height: 10),
         pw.Text('Period: $periodLabel', style: pw.TextStyle(fontSize: 10)),
+        pw.Text('Done by: $doneByLabel', style: pw.TextStyle(fontSize: 10)),
         pw.Text(
           'Entries: ${entries.length}',
           style: pw.TextStyle(fontSize: 10),
