@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'settings_tab.dart';
 import 'dashboard_tab.dart';
 import 'users_tab.dart';
+import 'audit_tab.dart';
 import '../../models/app_user.dart';
 import '../../theme/app_colors.dart';
 
@@ -21,7 +22,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     const DashboardTab(),
     const UsersTab(),
     const _TabPlaceholder(title: 'Reports & Analytics'),
-    const _TabPlaceholder(title: 'Audit Logs'),
+    const AuditTab(),
     SettingsTab(user: widget.user),
   ];
 
@@ -73,6 +74,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
 class _TabPlaceholder extends StatelessWidget {
   final String title;
   final List<Widget> children;
+  // ignore: unused_element_parameter
   const _TabPlaceholder({required this.title, this.children = const []});
 
   @override

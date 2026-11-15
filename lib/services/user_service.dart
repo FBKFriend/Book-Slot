@@ -1,3 +1,5 @@
+import 'audit_service.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/app_user.dart';
@@ -82,14 +84,6 @@ class UserService {
     });
   }
 
-  Future<void> setStatus(String email, String status) => _db
-      .collection('users')
-      .doc(email.toLowerCase())
-      .update({'status': status});
-
-  Future<void> deleteUser(String email) =>
-      _db.collection('users').doc(email.toLowerCase()).delete();
-
   static Map<String, Object?> nameFields(
     String first,
     String middle,
@@ -104,7 +98,6 @@ class UserService {
     };
   }
 
-  /// Superadmin adds a librarian. Throws AccountExistsException on duplicates.
   Future<void> addLibrarian({
     required String email,
     required String first,
@@ -113,6 +106,8 @@ class UserService {
   }) {
     final id = email.trim().toLowerCase();
     final ref = _db.collection('users').doc(id);
+    final logRef = AuditService.instance.newRef();
+    final name = nameFields(first, middle, last);
     return _db.runTransaction((tx) async {
       final snap = await tx.get(ref);
       if (snap.exists) throw const AccountExistsException();
@@ -120,23 +115,89 @@ class UserService {
         'email': id,
         'role': 'librarian',
         'status': 'active',
-        ...nameFields(first, middle, last),
+        ...name,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      tx.set(
+        logRef,
+        AuditService.instance.entryData(
+          action: 'account.add_librarian',
+          category: 'accounts',
+          targetEmail: id,
+          targetName: name['fullName'] as String,
+        ),
+      );
     });
   }
 
-  Future<void> authorize(String email) =>
-      _db.collection('users').doc(email.toLowerCase()).update({
-        'status': 'active',
-        'authorizedAt': FieldValue.serverTimestamp(),
-      });
+  Future<void> _updateAndLog({
+    required String email,
+    required Map<String, Object?> changes,
+    required String action,
+    String? details,
+  }) {
+    final ref = _db.collection('users').doc(email.toLowerCase());
+    final logRef = AuditService.instance.newRef();
+    return _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      tx.update(ref, changes);
+      tx.set(
+        logRef,
+        AuditService.instance.entryData(
+          action: action,
+          category: 'accounts',
+          targetEmail: ref.id,
+          targetName: (snap.data()?['fullName'] ?? '') as String,
+          details: details,
+        ),
+      );
+    });
+  }
 
-  Future<void> setRole(String email, String role) =>
-      _db.collection('users').doc(email.toLowerCase()).update({'role': role});
+  Future<void> setStatus(String email, String status) => _updateAndLog(
+    email: email,
+    changes: {'status': status},
+    action: status == 'suspended' ? 'account.suspend' : 'account.reactivate',
+  );
+
+  Future<void> authorize(String email) => _updateAndLog(
+    email: email,
+    changes: {'status': 'active', 'authorizedAt': FieldValue.serverTimestamp()},
+    action: 'account.authorize',
+  );
+
+  Future<void> setRole(String email, String role) => _updateAndLog(
+    email: email,
+    changes: {'role': role},
+    action: 'account.role_change',
+    details: 'New role: $role',
+  );
 
   Future<void> updateInfo(String email, Map<String, Object?> fields) =>
-      _db.collection('users').doc(email.toLowerCase()).update(fields);
+      _updateAndLog(
+        email: email,
+        changes: fields,
+        action: 'account.edit',
+        details: 'Updated profile information',
+      );
+
+  Future<void> deleteUser(String email) {
+    final ref = _db.collection('users').doc(email.toLowerCase());
+    final logRef = AuditService.instance.newRef();
+    return _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      tx.delete(ref);
+      tx.set(
+        logRef,
+        AuditService.instance.entryData(
+          action: 'account.reject',
+          category: 'accounts',
+          targetEmail: ref.id,
+          targetName: (snap.data()?['fullName'] ?? '') as String,
+        ),
+      );
+    });
+  }
 
   /// TESTING ONLY: creates fake students. Remove before release.
   Future<void> seedSampleStudents() async {
