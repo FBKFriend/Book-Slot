@@ -38,3 +38,26 @@ class AuditEntry {
     createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
   );
 }
+
+String auditActionTitle(String action) {
+  switch (action) {
+    case 'account.authorize':
+      return 'Authorized account';
+    case 'account.reject':
+      return 'Rejected registration';
+    case 'account.suspend':
+      return 'Suspended account';
+    case 'account.reactivate':
+      return 'Reactivated account';
+    case 'account.add_librarian':
+      return 'Added librarian';
+    case 'account.edit':
+      return 'Edited user information';
+    case 'account.role_change':
+      return 'Changed role';
+    case 'settings.update':
+      return 'Updated system settings';
+    default:
+      return action;
+  }
+}

@@ -21,3 +21,9 @@ String formatDateTime(DateTime d) {
   final ap = t.hour < 12 ? 'AM' : 'PM';
   return '${_months[t.month - 1]} ${t.day}, ${t.year} · $h12:$mm $ap';
 }
+
+/// e.g. "Nov 16, 2026"
+String formatDate(DateTime d) {
+  final t = d.toLocal();
+  return '${_months[t.month - 1]} ${t.day}, ${t.year}';
+}
