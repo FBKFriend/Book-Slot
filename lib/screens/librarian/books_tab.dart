@@ -7,7 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/book_cover.dart';
 import '../../widgets/genre_picker.dart';
 import '../../widgets/genre_tags.dart';
-import 'add_book_screen.dart';
+import 'book_form_screen.dart';
 
 class BooksTab extends StatefulWidget {
   final AppUser user;
@@ -51,6 +51,76 @@ class _BooksTabState extends State<BooksTab> {
     if (r != null) setState(() => _genres = r);
   }
 
+  void _edit(Book b) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BookFormScreen(user: widget.user, book: b),
+      ),
+    );
+  }
+
+  Future<void> _delete(Book b) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (b.availableCopies != b.totalCopies) {
+      final out = b.totalCopies - b.availableCopies;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Can\'t delete this book'),
+          content: Text(
+            '$out ${out == 1 ? 'copy is' : 'copies are'} currently borrowed. '
+            'A book can only be deleted when every copy is back in stock.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete book?'),
+        content: Text(
+          'This permanently removes "${b.title}" (${b.id}) and its cover.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      await BookService.instance.deleteBook(
+        actorRole: widget.user.role,
+        id: b.id,
+      );
+      messenger.showSnackBar(SnackBar(content: Text('Deleted ${b.id}')));
+    } on BookInUseException {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('That book has copies borrowed.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not delete the book.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
@@ -60,7 +130,7 @@ class _BooksTabState extends State<BooksTab> {
       appBar: AppBar(title: const Text('Book Management')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => AddBookScreen(user: widget.user)),
+          MaterialPageRoute(builder: (_) => BookFormScreen(user: widget.user)),
         ),
         icon: const Icon(Icons.add),
         label: const Text('Add book'),
@@ -169,7 +239,12 @@ class _BooksTabState extends State<BooksTab> {
                         style: t.bodySmall,
                       );
                     }
-                    return _BookCard(book: books[i - 1]);
+                    final b = books[i - 1];
+                    return _BookCard(
+                      book: b,
+                      onEdit: () => _edit(b),
+                      onDelete: () => _delete(b),
+                    );
                   },
                 );
               },
@@ -183,7 +258,13 @@ class _BooksTabState extends State<BooksTab> {
 
 class _BookCard extends StatelessWidget {
   final Book book;
-  const _BookCard({required this.book});
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  const _BookCard({
+    required this.book,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -193,73 +274,96 @@ class _BookCard extends StatelessWidget {
 
     return Card(
       margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            BookCover(
-              bookId: book.id,
-              version: book.coverVersion,
-              width: 64,
-              height: 96,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    book.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: t.titleMedium?.copyWith(
-                      color: AppColors.heading,
-                      fontWeight: FontWeight.w600,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onEdit,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              BookCover(
+                bookId: book.id,
+                version: book.coverVersion,
+                width: 64,
+                height: 96,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      book.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.titleMedium?.copyWith(
+                        color: AppColors.heading,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    book.author,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: t.bodyMedium,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    book.publicationYear == null
-                        ? book.id
-                        : '${book.id}  ·  ${book.publicationYear}',
-                    style: t.bodySmall,
-                  ),
-                  if (book.genres.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    GenreTags(genres: book.genres),
-                  ],
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: stockColor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        out
-                            ? 'None available (0 of ${book.totalCopies})'
-                            : '${book.availableCopies} of ${book.totalCopies} available',
-                        style: TextStyle(color: stockColor, fontSize: 12),
-                      ),
+                    const SizedBox(height: 2),
+                    Text(
+                      book.author,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.bodyMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      book.publicationYear == null
+                          ? book.id
+                          : '${book.id}  ·  ${book.publicationYear}',
+                      style: t.bodySmall,
+                    ),
+                    if (book.genres.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      GenreTags(genres: book.genres),
                     ],
-                  ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: stockColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            out
+                                ? 'None available (0 of ${book.totalCopies})'
+                                : '${book.availableCopies} of ${book.totalCopies} available',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: stockColor, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Options',
+                color: AppColors.card,
+                onSelected: (v) {
+                  if (v == 'edit') {
+                    onEdit();
+                  } else {
+                    onDelete();
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Edit book')),
+                  PopupMenuItem(value: 'delete', child: Text('Delete book')),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -59,6 +59,10 @@ String auditActionTitle(String action) {
       return 'Updated system settings';
     case 'book.add':
       return 'Added book';
+    case 'book.edit':
+      return 'Edited book';
+    case 'book.delete':
+      return 'Deleted book';
     default:
       return action;
   }

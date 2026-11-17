@@ -1,12 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'user_forms.dart';
 import '../../models/app_user.dart';
 import '../../services/user_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/filter_dropdown.dart';
 import '../../widgets/status_chip.dart';
 import 'user_detail_screen.dart';
+import 'user_forms.dart';
 
 class UsersTab extends StatefulWidget {
   const UsersTab({super.key});
@@ -16,7 +17,15 @@ class UsersTab extends StatefulWidget {
 }
 
 class _UsersTabState extends State<UsersTab> {
+  final _search = TextEditingController();
+  String _query = '';
   String _statusFilter = 'all';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,50 +71,54 @@ class _UsersTabState extends State<UsersTab> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Row(
-                children: [
-                  Text('Status', style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(width: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _statusFilter,
-                        dropdownColor: AppColors.card,
-                        borderRadius: BorderRadius.circular(12),
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('All')),
-                          DropdownMenuItem(
-                            value: 'pending',
-                            child: Text('Pending'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'active',
-                            child: Text('Active'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'suspended',
-                            child: Text('Suspended'),
-                          ),
-                        ],
-                        onChanged: (v) =>
-                            setState(() => _statusFilter = v ?? 'all'),
-                      ),
-                    ),
-                  ),
-                ],
+              child: TextField(
+                controller: _search,
+                decoration: InputDecoration(
+                  hintText: 'Search name, email, or student ID',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () {
+                            _search.clear();
+                            setState(() => _query = '');
+                          },
+                        ),
+                ),
+                onChanged: (v) => setState(() => _query = v),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FilterDropdown(
+                  label: 'Status',
+                  value: _statusFilter,
+                  options: const {
+                    'all': 'All',
+                    'pending': 'Pending',
+                    'active': 'Active',
+                    'suspended': 'Suspended',
+                  },
+                  onChanged: (v) => setState(() => _statusFilter = v),
+                ),
               ),
             ),
             Expanded(
               child: TabBarView(
                 children: [
-                  _UserList(role: 'student', statusFilter: _statusFilter),
-                  _UserList(role: 'librarian', statusFilter: _statusFilter),
+                  _UserList(
+                    role: 'student',
+                    statusFilter: _statusFilter,
+                    query: _query,
+                  ),
+                  _UserList(
+                    role: 'librarian',
+                    statusFilter: _statusFilter,
+                    query: _query,
+                  ),
                 ],
               ),
             ),
@@ -119,7 +132,12 @@ class _UsersTabState extends State<UsersTab> {
 class _UserList extends StatefulWidget {
   final String role;
   final String statusFilter;
-  const _UserList({required this.role, required this.statusFilter});
+  final String query;
+  const _UserList({
+    required this.role,
+    required this.statusFilter,
+    required this.query,
+  });
 
   @override
   State<_UserList> createState() => _UserListState();
@@ -145,20 +163,31 @@ class _UserListState extends State<_UserList>
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
+
         final all = snap.data!;
-        final users = widget.statusFilter == 'all'
-            ? all
-            : all.where((u) => u.status == widget.statusFilter).toList();
+        final q = widget.query.trim().toLowerCase();
+        final users = all.where((u) {
+          final statusOk =
+              widget.statusFilter == 'all' || u.status == widget.statusFilter;
+          final textOk =
+              q.isEmpty ||
+              u.name.toLowerCase().contains(q) ||
+              u.email.toLowerCase().contains(q) ||
+              (u.studentId ?? '').toLowerCase().contains(q);
+          return statusOk && textOk;
+        }).toList();
+
         if (users.isEmpty) {
           return Center(
             child: Text(
-              widget.statusFilter == 'all'
+              all.isEmpty
                   ? 'No ${widget.role}s yet'
-                  : 'No ${widget.statusFilter} ${widget.role}s',
+                  : 'No ${widget.role}s match your search',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           );
         }
+
         return ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: users.length,

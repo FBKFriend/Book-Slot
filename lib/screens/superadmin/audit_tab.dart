@@ -193,6 +193,10 @@ class _AuditCard extends StatelessWidget {
         return Icons.tune;
       case 'book.add':
         return Icons.menu_book_outlined;
+      case 'book.edit':
+        return Icons.edit_note;
+      case 'book.delete':
+        return Icons.delete_outline;
       default:
         return Icons.receipt_long_outlined;
     }

@@ -1,36 +1,64 @@
+// ignore: unnecessary_import
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/app_user.dart';
+import '../../models/book.dart';
 import '../../services/book_service.dart';
 import '../../services/cover_image.dart';
+import '../../services/cover_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/genre_picker.dart';
 
-class AddBookScreen extends StatefulWidget {
+/// Add a new book (book == null) or edit an existing one.
+class BookFormScreen extends StatefulWidget {
   final AppUser user;
-  const AddBookScreen({super.key, required this.user});
+  final Book? book;
+  const BookFormScreen({super.key, required this.user, this.book});
 
   @override
-  State<AddBookScreen> createState() => _AddBookScreenState();
+  State<BookFormScreen> createState() => _BookFormScreenState();
 }
 
-class _AddBookScreenState extends State<AddBookScreen> {
+class _BookFormScreenState extends State<BookFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _title = TextEditingController();
-  final _author = TextEditingController();
-  final _description = TextEditingController();
-  final _year = TextEditingController();
-  final _copies = TextEditingController(text: '1');
+  late final _title = TextEditingController(text: widget.book?.title ?? '');
+  late final _author = TextEditingController(text: widget.book?.author ?? '');
+  late final _description = TextEditingController(
+    text: widget.book?.description ?? '',
+  );
+  late final _year = TextEditingController(
+    text: widget.book?.publicationYear?.toString() ?? '',
+  );
+  late final _copies = TextEditingController(
+    text: '${widget.book?.totalCopies ?? 1}',
+  );
+  late Set<String> _genres = {...?widget.book?.genres};
 
-  Set<String> _genres = {};
-  Uint8List? _cover;
+  Uint8List? _cover; // newly picked
+  Uint8List? _existingCover; // already saved (edit mode)
+  bool _removeCover = false;
   String? _coverError;
   bool _pickingCover = false;
   bool _saving = false;
   String? _error;
+
+  bool get _editing => widget.book != null;
+  int get _borrowed =>
+      _editing ? widget.book!.totalCopies - widget.book!.availableCopies : 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final b = widget.book;
+    if (b != null && b.hasCover) {
+      CoverService.instance.load(b.id, b.coverVersion).then((bytes) {
+        if (mounted) setState(() => _existingCover = bytes);
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -56,7 +84,15 @@ class _AddBookScreenState extends State<AddBookScreen> {
         _coverError = r.error;
       } else {
         _cover = r.bytes;
+        _removeCover = false;
       }
+    });
+  }
+
+  void _clearCover() {
+    setState(() {
+      _cover = null;
+      _removeCover = widget.book?.hasCover ?? false;
     });
   }
 
@@ -73,25 +109,61 @@ class _AddBookScreenState extends State<AddBookScreen> {
       _saving = true;
       _error = null;
     });
+
+    final genres = _genres.toList()..sort();
+    final year = int.tryParse(_year.text.trim());
+    final copies = int.parse(_copies.text.trim());
+
     try {
-      final id = await BookService.instance.addBook(
-        actorRole: widget.user.role,
-        title: _title.text,
-        author: _author.text,
-        description: _description.text,
-        genres: _genres.toList()..sort(),
-        publicationYear: int.tryParse(_year.text.trim()),
-        totalCopies: int.parse(_copies.text.trim()),
-        cover: _cover,
-      );
-      nav.pop();
-      messenger.showSnackBar(SnackBar(content: Text('Added $id')));
-    } catch (e) {
-      debugPrint('addBook failed: $e');
+      final b = widget.book;
+      if (b == null) {
+        final id = await BookService.instance.addBook(
+          actorRole: widget.user.role,
+          title: _title.text,
+          author: _author.text,
+          description: _description.text,
+          genres: genres,
+          publicationYear: year,
+          totalCopies: copies,
+          cover: _cover,
+        );
+        nav.pop();
+        messenger.showSnackBar(SnackBar(content: Text('Added $id')));
+      } else {
+        await BookService.instance.updateBook(
+          actorRole: widget.user.role,
+          id: b.id,
+          title: _title.text,
+          author: _author.text,
+          description: _description.text,
+          genres: genres,
+          publicationYear: year,
+          totalCopies: copies,
+          newCover: _cover,
+          removeCover: _removeCover && _cover == null,
+        );
+        nav.pop();
+        messenger.showSnackBar(const SnackBar(content: Text('Changes saved')));
+      }
+    } on CopiesBelowBorrowedException catch (e) {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _error = 'Could not add the book. Please try again.';
+        _error =
+            'Total copies can\'t be lower than the ${e.borrowed} currently borrowed.';
+      });
+    } on BookNotFoundException {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'This book no longer exists.';
+      });
+    } catch (e) {
+      debugPrint('save book failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'Could not save the book. Please try again.';
       });
     }
   }
@@ -100,9 +172,10 @@ class _AddBookScreenState extends State<AddBookScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final sortedGenres = _genres.toList()..sort();
+    final shownCover = _cover ?? (_removeCover ? null : _existingCover);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add book')),
+      appBar: AppBar(title: Text(_editing ? 'Edit book' : 'Add book')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -125,8 +198,8 @@ class _AddBookScreenState extends State<AddBookScreen> {
                       ? const Center(
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : _cover != null
-                      ? Image.memory(_cover!, fit: BoxFit.cover)
+                      : shownCover != null
+                      ? Image.memory(shownCover, fit: BoxFit.cover)
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -144,10 +217,10 @@ class _AddBookScreenState extends State<AddBookScreen> {
             ),
             const SizedBox(height: 8),
             Center(child: Text('JPG or PNG, up to 2 MB', style: t.bodySmall)),
-            if (_cover != null)
+            if (shownCover != null)
               Center(
                 child: TextButton(
-                  onPressed: () => setState(() => _cover = null),
+                  onPressed: _clearCover,
                   child: const Text('Remove cover'),
                 ),
               ),
@@ -160,6 +233,15 @@ class _AddBookScreenState extends State<AddBookScreen> {
                   style: const TextStyle(color: Color(0xFFE57373)),
                 ),
               ),
+            if (_editing) ...[
+              const SizedBox(height: 12),
+              Center(
+                child: Text(
+                  'Book ID: ${widget.book!.id} (can\'t be changed)',
+                  style: t.bodySmall,
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             TextFormField(
               controller: _title,
@@ -221,14 +303,15 @@ class _AddBookScreenState extends State<AddBookScreen> {
                       FilteringTextInputFormatter.digitsOnly,
                       LengthLimitingTextInputFormatter(4),
                     ],
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Total copies',
+                      helperText: _editing ? 'Borrowed now: $_borrowed' : null,
                     ),
                     validator: (v) {
                       final n = int.tryParse((v ?? '').trim());
-                      return (n != null && n >= 1 && n <= 1000)
-                          ? null
-                          : '1 to 1000';
+                      if (n == null || n < 1 || n > 1000) return '1 to 1000';
+                      if (n < _borrowed) return 'Min $_borrowed (borrowed)';
+                      return null;
                     },
                   ),
                 ),
@@ -278,7 +361,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Add book'),
+                  : Text(_editing ? 'Save changes' : 'Add book'),
             ),
           ],
         ),
