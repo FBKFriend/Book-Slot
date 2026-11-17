@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'books_tab.dart';
 import '../../models/app_user.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
@@ -17,7 +18,7 @@ class _LibrarianShellState extends State<LibrarianShell> {
 
   late final List<Widget> _pages = [
     _TabPlaceholder(title: 'Dashboard', user: widget.user),
-    const _TabPlaceholder(title: 'Book Management'),
+    BooksTab(user: widget.user),
     const _TabPlaceholder(title: 'QR Scanner'),
     const _TabPlaceholder(title: 'Borrowing & Reservations'),
     const _TabPlaceholder(title: 'Transaction History'),

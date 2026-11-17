@@ -57,6 +57,8 @@ String auditActionTitle(String action) {
       return 'Changed role';
     case 'settings.update':
       return 'Updated system settings';
+    case 'book.add':
+      return 'Added book';
     default:
       return action;
   }

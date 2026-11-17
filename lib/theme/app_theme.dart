@@ -107,6 +107,10 @@ class AppTheme {
           );
         }),
       ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: AppColors.gold,
+        foregroundColor: AppColors.background,
+      ),
     );
   }
 }
