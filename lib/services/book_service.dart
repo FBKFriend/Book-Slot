@@ -36,6 +36,14 @@ class BookService {
     });
   }
 
+  /// Live view of one book. Emits null if it was deleted.
+  Stream<Book?> watchBook(String id) {
+    return _db.collection('books').doc(id).snapshots().map((s) {
+      final d = s.data();
+      return d == null ? null : Book.fromMap(s.id, d);
+    });
+  }
+
   /// Creates the next book (BK-0001, BK-0002, ...) and returns its ID.
   Future<String> addBook({
     required String actorRole,

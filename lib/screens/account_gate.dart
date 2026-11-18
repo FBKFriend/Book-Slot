@@ -1,3 +1,4 @@
+import 'student/student_shell.dart';
 import 'superadmin/superadmin_shell.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -60,7 +61,7 @@ class _AccountGateState extends State<AccountGate> {
               case 'librarian':
                 return LibrarianShell(user: me);
               default:
-                return RoleHomePlaceholder(user: me);
+                return StudentShell(user: me);
             }
           case 'suspended':
             return const StatusScreen(
