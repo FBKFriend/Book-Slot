@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_user.dart';
 import '../../models/book.dart';
+import '../../models/borrowing.dart';
 import '../../models/reservation.dart';
 import '../../services/book_service.dart';
+import '../../services/borrowing_service.dart';
 import '../../services/reservation_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/format.dart';
@@ -24,6 +26,8 @@ class BorrowingTab extends StatefulWidget {
 class _BorrowingTabState extends State<BorrowingTab> {
   late final Stream<List<Reservation>> _stream = ReservationService.instance
       .watchOpen();
+  late final Stream<List<Borrowing>> _borrowedStream = BorrowingService.instance
+      .watchActive();
   StreamSubscription<List<Book>>? _booksSub;
   Map<String, Book> _books = {};
   final Set<String> _busy = {};
@@ -70,61 +74,63 @@ class _BorrowingTabState extends State<BorrowingTab> {
     }
   }
 
+  void _snack(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Runs one librarian action, with a busy spinner and friendly errors.
   Future<void> _run(
-    Reservation r,
+    String id,
     Future<void> Function() action,
     String okMessage,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    setState(() => _busy.add(r.id));
+    setState(() => _busy.add(id));
     try {
       await action();
-      messenger.showSnackBar(SnackBar(content: Text(okMessage)));
+      if (mounted) _snack(okMessage);
     } on NoFreeCopyException {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No free copy: the last copy is already held by another accepted reservation.',
-          ),
-        ),
-      );
+      if (mounted) {
+        _snack(
+          'No free copy: the last copy is already held by another accepted reservation.',
+        );
+      }
     } on ReservationChangedException {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('This request was already handled.')),
-      );
+      if (mounted) _snack('This request was already handled.');
     } on BookNotFoundException {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'This book no longer exists. You can deny the request.',
-          ),
-        ),
-      );
+      if (mounted) {
+        _snack('This book no longer exists. You can deny the request.');
+      }
+    } on BorrowLimitException catch (e) {
+      if (mounted) {
+        _snack(
+          'This student already has ${e.limit} books borrowed, which is the limit.',
+        );
+      }
+    } on PickupExpiredException {
+      try {
+        await ReservationService.instance.expireOverdue(
+          actorRole: widget.user.role,
+        );
+      } catch (_) {}
+      if (mounted) {
+        _snack('The pickup deadline has passed, so this reservation expired.');
+      }
+    } on BorrowingChangedException {
+      if (mounted) _snack('This book was already returned.');
     } catch (e) {
-      debugPrint('reservation action failed: $e');
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
-        ),
-      );
+      debugPrint('action failed: $e');
+      if (mounted) _snack('Something went wrong. Please try again.');
     }
-    if (mounted) setState(() => _busy.remove(r.id));
+    if (mounted) setState(() => _busy.remove(id));
   }
 
-  Future<void> _accept(Reservation r) => _run(
-    r,
-    () => ReservationService.instance.accept(r, actorRole: widget.user.role),
-    'Accepted. ${r.studentName} has been notified.',
-  );
-
-  Future<void> _deny(Reservation r) async {
+  Future<bool> _confirm(String title, String message, String action) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Deny reservation?'),
-        content: Text(
-          '${r.studentName} will be notified that the reservation for "${r.bookTitle}" was denied.',
-        ),
+        title: Text(title),
+        content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -132,96 +138,163 @@ class _BorrowingTabState extends State<BorrowingTab> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Deny'),
+            child: Text(action),
           ),
         ],
       ),
     );
-    if (ok != true || !mounted) return;
+    return ok == true && mounted;
+  }
+
+  Future<void> _accept(Reservation r) => _run(
+    r.id,
+    () => ReservationService.instance.accept(r, actorRole: widget.user.role),
+    'Accepted. ${r.studentName} has been notified.',
+  );
+
+  Future<void> _deny(Reservation r) async {
+    final ok = await _confirm(
+      'Deny reservation?',
+      '${r.studentName} will be notified that the reservation for "${r.bookTitle}" was denied.',
+      'Deny',
+    );
+    if (!ok) return;
     await _run(
-      r,
+      r.id,
       () => ReservationService.instance.deny(r, actorRole: widget.user.role),
       'Denied. ${r.studentName} has been notified.',
     );
   }
 
+  // TEMP: the QR scanner will replace this button
+  Future<void> _pickup(Reservation r) async {
+    final ok = await _confirm(
+      'Mark as picked up?',
+      '${r.studentName} is taking "${r.bookTitle}". The borrowing starts now.',
+      'Confirm',
+    );
+    if (!ok) return;
+    await _run(
+      r.id,
+      () => BorrowingService.instance.startBorrow(r, staff: widget.user),
+      'Borrowing started for ${r.studentName}.',
+    );
+  }
+
+  // TEMP: the QR scanner will replace this button
+  Future<void> _return(Borrowing b) async {
+    final ok = await _confirm(
+      'Mark as returned?',
+      '"${b.bookTitle}" is coming back from ${b.studentName}.',
+      'Confirm',
+    );
+    if (!ok) return;
+    await _run(
+      b.id,
+      () => BorrowingService.instance.returnBook(b, staff: widget.user),
+      'Returned. The book is back in stock.',
+    );
+  }
+
+  Widget _list<T>(
+    List<T> items,
+    String empty,
+    Widget Function(T item) builder,
+  ) {
+    if (items.isEmpty) {
+      return Center(
+        child: Text(empty, style: Theme.of(context).textTheme.bodySmall),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
+      itemBuilder: (context, i) => builder(items[i]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
     return StreamBuilder<List<Reservation>>(
       stream: _stream,
-      builder: (context, snap) {
-        final all = snap.data ?? const <Reservation>[];
-        final far = DateTime(9999);
-        final pending = all.where((r) => r.status == 'pending').toList()
-          ..sort((a, b) => (a.createdAt ?? far).compareTo(b.createdAt ?? far));
-        final accepted = all.where((r) => r.status == 'accepted').toList()
-          ..sort(
-            (a, b) =>
-                (a.pickupDeadline ?? far).compareTo(b.pickupDeadline ?? far),
-          );
+      builder: (context, resSnap) {
+        return StreamBuilder<List<Borrowing>>(
+          stream: _borrowedStream,
+          builder: (context, borSnap) {
+            final all = resSnap.data ?? const <Reservation>[];
+            final borrowed = borSnap.data ?? const <Borrowing>[];
+            final far = DateTime(9999);
+            final pending = all.where((r) => r.status == 'pending').toList()
+              ..sort(
+                (a, b) => (a.createdAt ?? far).compareTo(b.createdAt ?? far),
+              );
+            final accepted = all.where((r) => r.status == 'accepted').toList()
+              ..sort(
+                (a, b) => (a.pickupDeadline ?? far).compareTo(
+                  b.pickupDeadline ?? far,
+                ),
+              );
 
-        Widget body;
-        if (snap.hasError) {
-          body = const Center(child: Text('Could not load reservations.'));
-        } else if (!snap.hasData) {
-          body = const Center(child: CircularProgressIndicator());
-        } else {
-          body = TabBarView(
-            children: [
-              pending.isEmpty
-                  ? Center(
-                      child: Text('No pending requests', style: t.bodySmall),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: pending.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 10),
-                      itemBuilder: (context, i) {
-                        final r = pending[i];
-                        return _RequestCard(
-                          r: r,
-                          book: _books[r.bookId],
-                          busy: _busy.contains(r.id),
-                          onAccept: () => _accept(r),
-                          onDeny: () => _deny(r),
-                        );
-                      },
+            Widget body;
+            if (resSnap.hasError || borSnap.hasError) {
+              body = const Center(child: Text('Could not load this tab.'));
+            } else if (!resSnap.hasData || !borSnap.hasData) {
+              body = const Center(child: CircularProgressIndicator());
+            } else {
+              body = TabBarView(
+                children: [
+                  _list<Reservation>(
+                    pending,
+                    'No pending requests',
+                    (r) => _RequestCard(
+                      r: r,
+                      book: _books[r.bookId],
+                      busy: _busy.contains(r.id),
+                      onAccept: () => _accept(r),
+                      onDeny: () => _deny(r),
                     ),
-              accepted.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Nothing waiting for pickup',
-                        style: t.bodySmall,
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: accepted.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 10),
-                      itemBuilder: (context, i) => _PickupCard(accepted[i]),
+                  ),
+                  _list<Reservation>(
+                    accepted,
+                    'Nothing waiting for pickup',
+                    (r) => _PickupCard(
+                      r: r,
+                      busy: _busy.contains(r.id),
+                      onPickup: () => _pickup(r),
                     ),
-            ],
-          );
-        }
-
-        return DefaultTabController(
-          length: 2,
-          child: Scaffold(
-            appBar: AppBar(
-              title: const Text('Borrowing & Reservations'),
-              bottom: TabBar(
-                dividerColor: AppColors.border,
-                tabs: [
-                  Tab(text: 'Requests (${pending.length})'),
-                  Tab(text: 'To pick up (${accepted.length})'),
+                  ),
+                  _list<Borrowing>(
+                    borrowed,
+                    'No books are borrowed right now',
+                    (b) => _BorrowedCard(
+                      b: b,
+                      busy: _busy.contains(b.id),
+                      onReturn: () => _return(b),
+                    ),
+                  ),
                 ],
+              );
+            }
+
+            return DefaultTabController(
+              length: 3,
+              child: Scaffold(
+                appBar: AppBar(
+                  title: const Text('Borrowing & Reservations'),
+                  bottom: TabBar(
+                    dividerColor: AppColors.border,
+                    tabs: [
+                      Tab(text: 'Requests (${pending.length})'),
+                      Tab(text: 'Pickup (${accepted.length})'),
+                      Tab(text: 'Borrowed (${borrowed.length})'),
+                    ],
+                  ),
+                ),
+                body: body,
               ),
-            ),
-            body: body,
-          ),
+            );
+          },
         );
       },
     );
@@ -229,23 +302,29 @@ class _BorrowingTabState extends State<BorrowingTab> {
 }
 
 class _StudentLine extends StatelessWidget {
-  final Reservation r;
-  const _StudentLine(this.r);
+  final String name;
+  final String? studentId;
+  final String email;
+  const _StudentLine({
+    required this.name,
+    required this.studentId,
+    required this.email,
+  });
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final name = r.studentName.isEmpty ? r.studentEmail : r.studentName;
+    final title = name.isEmpty ? email : name;
     final sub = [
-      if ((r.studentId ?? '').isNotEmpty) r.studentId!,
-      r.studentEmail,
+      if ((studentId ?? '').isNotEmpty) studentId!,
+      email,
     ].join('  ·  ');
     return Row(
       children: [
         CircleAvatar(
           backgroundColor: AppColors.background,
           child: Text(
-            name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+            title.isEmpty ? '?' : title.characters.first.toUpperCase(),
             style: const TextStyle(color: AppColors.gold),
           ),
         ),
@@ -255,7 +334,7 @@ class _StudentLine extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                name,
+                title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -276,6 +355,12 @@ class _StudentLine extends StatelessWidget {
     );
   }
 }
+
+Widget _spinner() => const SizedBox(
+  width: 18,
+  height: 18,
+  child: CircularProgressIndicator(strokeWidth: 2),
+);
 
 class _RequestCard extends StatelessWidget {
   final Reservation r;
@@ -308,7 +393,11 @@ class _RequestCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _StudentLine(r),
+            _StudentLine(
+              name: r.studentName,
+              studentId: r.studentId,
+              email: r.studentEmail,
+            ),
             const Divider(color: AppColors.border, height: 24),
             Text(
               r.bookTitle,
@@ -371,13 +460,7 @@ class _RequestCard extends StatelessWidget {
                       minimumSize: const Size.fromHeight(44),
                     ),
                     onPressed: (busy || noFree) ? null : onAccept,
-                    child: busy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Accept'),
+                    child: busy ? _spinner() : const Text('Accept'),
                   ),
                 ),
               ],
@@ -391,7 +474,13 @@ class _RequestCard extends StatelessWidget {
 
 class _PickupCard extends StatelessWidget {
   final Reservation r;
-  const _PickupCard(this.r);
+  final bool busy;
+  final VoidCallback onPickup;
+  const _PickupCard({
+    required this.r,
+    required this.busy,
+    required this.onPickup,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -404,7 +493,11 @@ class _PickupCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _StudentLine(r),
+            _StudentLine(
+              name: r.studentName,
+              studentId: r.studentId,
+              email: r.studentEmail,
+            ),
             const Divider(color: AppColors.border, height: 24),
             Text(
               r.bookTitle,
@@ -429,6 +522,94 @@ class _PickupCard extends StatelessWidget {
                   style: const TextStyle(color: AppColors.gold, fontSize: 13),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            // TEMP: the QR scanner will replace this button
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+              ),
+              onPressed: busy ? null : onPickup,
+              child: busy ? _spinner() : const Text('Mark as picked up'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BorrowedCard extends StatelessWidget {
+  final Borrowing b;
+  final bool busy;
+  final VoidCallback onReturn;
+  const _BorrowedCard({
+    required this.b,
+    required this.busy,
+    required this.onReturn,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final overdue = b.isOverdue;
+    final color = overdue ? const Color(0xFFE57373) : AppColors.gold;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _StudentLine(
+              name: b.studentName,
+              studentId: b.studentId,
+              email: b.studentEmail,
+            ),
+            const Divider(color: AppColors.border, height: 24),
+            Text(
+              b.bookTitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: t.titleMedium?.copyWith(
+                color: AppColors.heading,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              b.borrowedAt == null
+                  ? '${b.bookId}  ·  Borrowed just now'
+                  : '${b.bookId}  ·  Borrowed ${formatDate(b.borrowedAt!)}',
+              style: t.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  overdue ? Icons.warning_amber_rounded : Icons.event_outlined,
+                  size: 16,
+                  color: color,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  b.dueAt == null
+                      ? 'No due date'
+                      : overdue
+                      ? 'Overdue · was due ${formatDate(b.dueAt!)}'
+                      : 'Due ${formatDate(b.dueAt!)}',
+                  style: TextStyle(color: color, fontSize: 13),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // TEMP: the QR scanner will replace this button
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+              ),
+              onPressed: busy ? null : onReturn,
+              child: busy ? _spinner() : const Text('Mark as returned'),
             ),
           ],
         ),

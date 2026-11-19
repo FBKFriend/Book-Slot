@@ -222,7 +222,11 @@ class _ReserveBarState extends State<_ReserveBar> {
             stream: _stream,
             builder: (context, snap) {
               final mine = (snap.data ?? const <Reservation>[])
-                  .where((r) => r.bookId == widget.book.id && r.isActive)
+                  .where(
+                    (r) =>
+                        r.bookId == widget.book.id &&
+                        (r.isActive || r.isBorrowing),
+                  )
                   .toList();
               final active = mine.isEmpty ? null : mine.first;
 
@@ -233,6 +237,12 @@ class _ReserveBarState extends State<_ReserveBar> {
               if (snap.hasError) {
                 enabled = false;
                 note = 'Could not check your reservations.';
+              } else if (active != null && active.isBorrowing) {
+                enabled = false;
+                label = 'Borrowed';
+                note = active.dueAt == null
+                    ? 'You are currently borrowing this book.'
+                    : 'You are borrowing this book. Due ${formatDate(active.dueAt!)}.';
               } else if (active != null && active.status == 'accepted') {
                 enabled = false;
                 label = 'Reserved';

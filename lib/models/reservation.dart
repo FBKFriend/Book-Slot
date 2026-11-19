@@ -7,9 +7,10 @@ class Reservation {
   final String studentEmail;
   final String studentName;
   final String? studentId;
-  final String status; // pending | accepted | denied | expired | dropped
+  final String status; // pending | accepted | denied | expired | dropped | picked_up | returned
   final DateTime? createdAt;
   final DateTime? pickupDeadline; // set when accepted
+  final DateTime? dueAt; // set when picked up
 
   const Reservation({
     required this.id,
@@ -21,9 +22,11 @@ class Reservation {
     this.studentId,
     this.createdAt,
     this.pickupDeadline,
+    this.dueAt,
   });
 
   bool get isActive => status == 'pending' || status == 'accepted';
+  bool get isBorrowing => status == 'picked_up';
 
   factory Reservation.fromDoc(String id, Map<String, dynamic> d) => Reservation(
     id: id,
@@ -35,5 +38,6 @@ class Reservation {
     status: (d['status'] ?? 'pending') as String,
     createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
     pickupDeadline: (d['pickupDeadline'] as Timestamp?)?.toDate(),
+    dueAt: (d['dueAt'] as Timestamp?)?.toDate(),
   );
 }

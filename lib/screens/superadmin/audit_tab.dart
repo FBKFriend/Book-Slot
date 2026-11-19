@@ -205,6 +205,12 @@ class _AuditCard extends StatelessWidget {
         return Icons.bookmark_remove_outlined;
       case 'reservation.expire':
         return Icons.timer_off_outlined;
+      case 'reservation.drop':
+        return Icons.event_busy_outlined;
+      case 'borrow.start':
+        return Icons.north_east;
+      case 'borrow.return':
+        return Icons.south_west;
       default:
         return Icons.receipt_long_outlined;
     }

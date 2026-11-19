@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'history_tab.dart';
 import 'borrowing_tab.dart';
 import 'books_tab.dart';
 import '../../models/app_user.dart';
@@ -23,7 +24,7 @@ class _LibrarianShellState extends State<LibrarianShell> {
     BooksTab(user: widget.user),
     const _TabPlaceholder(title: 'QR Scanner'),
     BorrowingTab(user: widget.user, active: _index == 3),
-    const _TabPlaceholder(title: 'Transaction History'),
+    const HistoryTab(),
   ];
 
   Widget _scanIcon() => Container(

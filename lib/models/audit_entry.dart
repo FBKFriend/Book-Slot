@@ -71,6 +71,12 @@ String auditActionTitle(String action) {
       return 'Denied reservation';
     case 'reservation.expire':
       return 'Reservation expired';
+    case 'reservation.drop':
+      return 'Reservation dropped';
+    case 'borrow.start':
+      return 'Book picked up';
+    case 'borrow.return':
+      return 'Book returned';
     default:
       return action;
   }

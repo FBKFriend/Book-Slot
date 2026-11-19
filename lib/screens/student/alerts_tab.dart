@@ -71,6 +71,8 @@ class _AlertCard extends StatelessWidget {
         return (Icons.cancel_outlined, const Color(0xFFE57373));
       case 'reservation_expired':
         return (Icons.timer_off_outlined, AppColors.gold);
+      case 'reservation_dropped':
+        return (Icons.remove_circle_outline, const Color(0xFFE57373));
       default:
         return (Icons.notifications_outlined, AppColors.gold);
     }

@@ -103,6 +103,12 @@ class ReservationService {
     if (active.any((d) => d.data()['bookId'] == book.id)) {
       throw const AlreadyReservedException();
     }
+
+    final holding = mine.docs.any(
+      (d) => d.data()['bookId'] == book.id && d.data()['status'] == 'picked_up',
+    );
+    if (holding) throw const AlreadyReservedException();
+
     if (active.length >= settings.maxActiveReservations) {
       throw ReservationLimitException(settings.maxActiveReservations);
     }
@@ -299,6 +305,69 @@ class ReservationService {
           targetEmail: r.studentEmail,
           targetName: r.studentName,
           details: '${r.bookId} - ${r.bookTitle}\nPickup deadline passed',
+        ),
+      );
+      return true;
+    });
+  }
+
+  /// Called after a pickup. If no copy is left on the shelf, every request
+  /// still pending for that book is dropped and the students are told.
+  Future<int> dropPendingIfOutOfStock({
+    required String bookId,
+    required String actorRole,
+  }) async {
+    final book = (await _db.collection('books').doc(bookId).get()).data();
+    final available = ((book?['availableCopies'] ?? 0) as num).toInt();
+    if (available > 0) return 0;
+
+    final snap = await _db
+        .collection('reservations')
+        .where('bookId', isEqualTo: bookId)
+        .get();
+    var count = 0;
+    for (final d in snap.docs) {
+      final r = Reservation.fromDoc(d.id, d.data());
+      if (r.status != 'pending') continue;
+      try {
+        if (await _dropOne(r, actorRole)) count++;
+      } catch (e) {
+        debugPrint('drop ${r.id} failed: $e');
+      }
+    }
+    return count;
+  }
+
+  Future<bool> _dropOne(Reservation r, String actorRole) {
+    final resRef = _db.collection('reservations').doc(r.id);
+    final noteRef = _db.collection('notifications').doc();
+    final logRef = AuditService.instance.newRef();
+
+    return _db.runTransaction<bool>((tx) async {
+      final snap = await tx.get(resRef);
+      if (snap.data()?['status'] != 'pending') return false;
+
+      tx.update(resRef, {'status': 'dropped'});
+      tx.set(
+        noteRef,
+        _note(
+          toEmail: r.studentEmail,
+          type: 'reservation_dropped',
+          title: 'Reservation cancelled',
+          message:
+              'The last copy of "${r.bookTitle}" was picked up by another student, so your reservation was cancelled. You can reserve it again once a copy is returned.',
+          bookId: r.bookId,
+        ),
+      );
+      tx.set(
+        logRef,
+        AuditService.instance.entryData(
+          action: 'reservation.drop',
+          category: 'reservations',
+          actorRole: actorRole,
+          targetEmail: r.studentEmail,
+          targetName: r.studentName,
+          details: '${r.bookId} - ${r.bookTitle}\nLast copy was picked up',
         ),
       );
       return true;
