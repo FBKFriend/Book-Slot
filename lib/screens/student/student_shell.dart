@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'alerts_tab.dart';
+import '../../models/app_notification.dart';
+import '../../services/notification_service.dart';
 import 'catalog_tab.dart';
 import 'search_tab.dart';
 import '../../models/app_user.dart';
@@ -17,54 +20,71 @@ class StudentShell extends StatefulWidget {
 class _StudentShellState extends State<StudentShell> {
   int _index = 0;
 
-  late final List<Widget> _pages = [
-    const CatalogTab(),
-    const SearchTab(),
-    const _TabPlaceholder(title: 'My Library'),
-    const _TabPlaceholder(title: 'Notifications'),
-    _SettingsPlaceholder(user: widget.user),
-  ];
+  late final Stream<List<AppNotification>> _notes = NotificationService.instance
+      .watchFor(widget.user.email);
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _index, children: _pages),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.border)),
-        ),
-        child: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.auto_stories_outlined),
-              selectedIcon: Icon(Icons.auto_stories),
-              label: 'Catalog',
+    return StreamBuilder<List<AppNotification>>(
+      stream: _notes,
+      builder: (context, snap) {
+        final notes = snap.data;
+        final unread = notes?.where((n) => !n.isRead).length ?? 0;
+        final pages = <Widget>[
+          CatalogTab(user: widget.user),
+          SearchTab(user: widget.user),
+          const _TabPlaceholder(title: 'My Library'),
+          AlertsTab(notes: notes, hasError: snap.hasError),
+          _SettingsPlaceholder(user: widget.user),
+        ];
+        return Scaffold(
+          body: IndexedStack(index: _index, children: pages),
+          bottomNavigationBar: Container(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.border)),
             ),
-            NavigationDestination(
-              icon: Icon(Icons.search),
-              selectedIcon: Icon(Icons.search),
-              label: 'Search',
+            child: NavigationBar(
+              selectedIndex: _index,
+              onDestinationSelected: (i) => setState(() => _index = i),
+              destinations: [
+                const NavigationDestination(
+                  icon: Icon(Icons.auto_stories_outlined),
+                  selectedIcon: Icon(Icons.auto_stories),
+                  label: 'Catalog',
+                ),
+                const NavigationDestination(
+                  icon: Icon(Icons.search),
+                  selectedIcon: Icon(Icons.search),
+                  label: 'Search',
+                ),
+                const NavigationDestination(
+                  icon: Icon(Icons.bookmarks_outlined),
+                  selectedIcon: Icon(Icons.bookmarks),
+                  label: 'Library',
+                ),
+                NavigationDestination(
+                  icon: Badge(
+                    isLabelVisible: unread > 0,
+                    label: Text('$unread'),
+                    child: const Icon(Icons.notifications_outlined),
+                  ),
+                  selectedIcon: Badge(
+                    isLabelVisible: unread > 0,
+                    label: Text('$unread'),
+                    child: const Icon(Icons.notifications),
+                  ),
+                  label: 'Alerts',
+                ),
+                const NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: 'Settings',
+                ),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(Icons.bookmarks_outlined),
-              selectedIcon: Icon(Icons.bookmarks),
-              label: 'Library',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.notifications_outlined),
-              selectedIcon: Icon(Icons.notifications),
-              label: 'Alerts',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings),
-              label: 'Settings',
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

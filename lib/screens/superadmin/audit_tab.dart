@@ -197,6 +197,14 @@ class _AuditCard extends StatelessWidget {
         return Icons.edit_note;
       case 'book.delete':
         return Icons.delete_outline;
+      case 'reservation.create':
+        return Icons.bookmark_add_outlined;
+      case 'reservation.accept':
+        return Icons.bookmark_added_outlined;
+      case 'reservation.deny':
+        return Icons.bookmark_remove_outlined;
+      case 'reservation.expire':
+        return Icons.timer_off_outlined;
       default:
         return Icons.receipt_long_outlined;
     }

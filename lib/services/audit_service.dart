@@ -12,6 +12,9 @@ class AuditService {
   DocumentReference<Map<String, dynamic>> newRef() =>
       _db.collection('auditLogs').doc();
 
+  String get currentEmail =>
+      (FirebaseAuth.instance.currentUser?.email ?? '').toLowerCase();
+
   /// Data for one log entry. Write it inside the same transaction/batch as
   /// the action itself so the two always succeed or fail together.
   Map<String, Object?> entryData({

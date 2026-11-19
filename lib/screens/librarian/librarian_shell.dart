@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'borrowing_tab.dart';
 import 'books_tab.dart';
 import '../../models/app_user.dart';
 import '../../services/auth_service.dart';
@@ -16,11 +17,12 @@ class LibrarianShell extends StatefulWidget {
 class _LibrarianShellState extends State<LibrarianShell> {
   int _index = 0;
 
-  late final List<Widget> _pages = [
+  // A getter, so the Borrowing tab knows when it becomes the visible tab
+  List<Widget> get _pages => [
     _TabPlaceholder(title: 'Dashboard', user: widget.user),
     BooksTab(user: widget.user),
     const _TabPlaceholder(title: 'QR Scanner'),
-    const _TabPlaceholder(title: 'Borrowing & Reservations'),
+    BorrowingTab(user: widget.user, active: _index == 3),
     const _TabPlaceholder(title: 'Transaction History'),
   ];
 

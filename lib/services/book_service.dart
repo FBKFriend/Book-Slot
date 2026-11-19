@@ -126,6 +126,10 @@ class BookService {
       final oldAvailable = ((old['availableCopies'] ?? 0) as num).toInt();
       final borrowed = oldTotal - oldAvailable;
       if (totalCopies < borrowed) throw CopiesBelowBorrowedException(borrowed);
+      final reserved = ((old['reservedCopies'] ?? 0) as num).toInt();
+      if (totalCopies < borrowed + reserved) {
+        throw CopiesBelowBorrowedException(borrowed + reserved);
+      }
 
       final oldVersion = ((old['coverVersion'] ?? 0) as num).toInt();
       var version = oldVersion;
@@ -208,6 +212,8 @@ class BookService {
       final total = ((d['totalCopies'] ?? 0) as num).toInt();
       final available = ((d['availableCopies'] ?? 0) as num).toInt();
       if (available != total) throw BookInUseException(total - available);
+      final reserved = ((d['reservedCopies'] ?? 0) as num).toInt();
+      if (reserved > 0) throw BookInUseException(reserved);
 
       tx.delete(bookRef);
       tx.delete(coverRef);

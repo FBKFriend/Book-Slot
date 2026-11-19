@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/app_user.dart';
 import '../../models/book.dart';
 import '../../services/book_service.dart';
 import '../../theme/app_colors.dart';
@@ -9,7 +10,8 @@ import '../../widgets/genre_picker.dart';
 import 'book_detail_screen.dart';
 
 class SearchTab extends StatefulWidget {
-  const SearchTab({super.key});
+  final AppUser user;
+  const SearchTab({super.key, required this.user});
 
   @override
   State<SearchTab> createState() => _SearchTabState();
@@ -205,7 +207,7 @@ class _SearchTabState extends State<SearchTab> {
                     final b = books[i - 1];
                     return BookListCard(
                       book: b,
-                      onTap: () => openBookDetail(context, b),
+                      onTap: () => openBookDetail(context, b, widget.user),
                     );
                   },
                 );

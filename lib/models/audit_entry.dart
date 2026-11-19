@@ -63,6 +63,14 @@ String auditActionTitle(String action) {
       return 'Edited book';
     case 'book.delete':
       return 'Deleted book';
+    case 'reservation.create':
+      return 'Reserved a book';
+    case 'reservation.accept':
+      return 'Accepted reservation';
+    case 'reservation.deny':
+      return 'Denied reservation';
+    case 'reservation.expire':
+      return 'Reservation expired';
     default:
       return action;
   }

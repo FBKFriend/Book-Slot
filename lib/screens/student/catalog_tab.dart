@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../models/app_user.dart';
 import '../../models/book.dart';
 import '../../services/book_service.dart';
 import '../../widgets/book_grid_card.dart';
 import 'book_detail_screen.dart';
 
 class CatalogTab extends StatefulWidget {
-  const CatalogTab({super.key});
+  final AppUser user;
+  const CatalogTab({super.key, required this.user});
 
   @override
   State<CatalogTab> createState() => _CatalogTabState();
@@ -59,7 +61,7 @@ class _CatalogTabState extends State<CatalogTab> {
                 itemBuilder: (context, i) => BookGridCard(
                   book: books[i],
                   width: w,
-                  onTap: () => openBookDetail(context, books[i]),
+                  onTap: () => openBookDetail(context, books[i], widget.user),
                 ),
               );
             },
