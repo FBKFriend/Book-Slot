@@ -77,6 +77,8 @@ String auditActionTitle(String action) {
       return 'Book picked up';
     case 'borrow.return':
       return 'Book returned';
+    case 'reservation.cancel':
+      return 'Cancelled reservation';
     default:
       return action;
   }

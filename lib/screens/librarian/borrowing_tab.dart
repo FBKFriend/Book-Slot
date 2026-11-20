@@ -166,36 +166,6 @@ class _BorrowingTabState extends State<BorrowingTab> {
     );
   }
 
-  // TEMP: the QR scanner will replace this button
-  Future<void> _pickup(Reservation r) async {
-    final ok = await _confirm(
-      'Mark as picked up?',
-      '${r.studentName} is taking "${r.bookTitle}". The borrowing starts now.',
-      'Confirm',
-    );
-    if (!ok) return;
-    await _run(
-      r.id,
-      () => BorrowingService.instance.startBorrow(r, staff: widget.user),
-      'Borrowing started for ${r.studentName}.',
-    );
-  }
-
-  // TEMP: the QR scanner will replace this button
-  Future<void> _return(Borrowing b) async {
-    final ok = await _confirm(
-      'Mark as returned?',
-      '"${b.bookTitle}" is coming back from ${b.studentName}.',
-      'Confirm',
-    );
-    if (!ok) return;
-    await _run(
-      b.id,
-      () => BorrowingService.instance.returnBook(b, staff: widget.user),
-      'Returned. The book is back in stock.',
-    );
-  }
-
   Widget _list<T>(
     List<T> items,
     String empty,
@@ -258,20 +228,12 @@ class _BorrowingTabState extends State<BorrowingTab> {
                   _list<Reservation>(
                     accepted,
                     'Nothing waiting for pickup',
-                    (r) => _PickupCard(
-                      r: r,
-                      busy: _busy.contains(r.id),
-                      onPickup: () => _pickup(r),
-                    ),
+                    (r) => _PickupCard(r),
                   ),
                   _list<Borrowing>(
                     borrowed,
                     'No books are borrowed right now',
-                    (b) => _BorrowedCard(
-                      b: b,
-                      busy: _busy.contains(b.id),
-                      onReturn: () => _return(b),
-                    ),
+                    (b) => _BorrowedCard(b),
                   ),
                 ],
               );
@@ -474,13 +436,7 @@ class _RequestCard extends StatelessWidget {
 
 class _PickupCard extends StatelessWidget {
   final Reservation r;
-  final bool busy;
-  final VoidCallback onPickup;
-  const _PickupCard({
-    required this.r,
-    required this.busy,
-    required this.onPickup,
-  });
+  const _PickupCard(this.r);
 
   @override
   Widget build(BuildContext context) {
@@ -524,13 +480,9 @@ class _PickupCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // TEMP: the QR scanner will replace this button
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(44),
-              ),
-              onPressed: busy ? null : onPickup,
-              child: busy ? _spinner() : const Text('Mark as picked up'),
+            Text(
+              "Scan the student's QR code in the Scan tab to hand over the book.",
+              style: t.bodySmall,
             ),
           ],
         ),
@@ -541,13 +493,7 @@ class _PickupCard extends StatelessWidget {
 
 class _BorrowedCard extends StatelessWidget {
   final Borrowing b;
-  final bool busy;
-  final VoidCallback onReturn;
-  const _BorrowedCard({
-    required this.b,
-    required this.busy,
-    required this.onReturn,
-  });
+  const _BorrowedCard(this.b);
 
   @override
   Widget build(BuildContext context) {
@@ -603,13 +549,9 @@ class _BorrowedCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // TEMP: the QR scanner will replace this button
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(44),
-              ),
-              onPressed: busy ? null : onReturn,
-              child: busy ? _spinner() : const Text('Mark as returned'),
+            Text(
+              "Scan the student's return QR code in the Scan tab to return it.",
+              style: t.bodySmall,
             ),
           ],
         ),

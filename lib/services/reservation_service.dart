@@ -373,4 +373,27 @@ class ReservationService {
       return true;
     });
   }
+
+  /// Student cancels their own request while it is still pending.
+  Future<void> cancel(Reservation r) {
+    final resRef = _db.collection('reservations').doc(r.id);
+    final logRef = AuditService.instance.newRef();
+
+    return _db.runTransaction<void>((tx) async {
+      final snap = await tx.get(resRef);
+      if (snap.data()?['status'] != 'pending') {
+        throw const ReservationChangedException();
+      }
+      tx.update(resRef, {'status': 'cancelled'});
+      tx.set(
+        logRef,
+        AuditService.instance.entryData(
+          action: 'reservation.cancel',
+          category: 'reservations',
+          actorRole: 'student',
+          details: '${r.bookId} - ${r.bookTitle}',
+        ),
+      );
+    });
+  }
 }

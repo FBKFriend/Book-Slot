@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'library_tab.dart';
 import 'alerts_tab.dart';
 import '../../models/app_notification.dart';
 import '../../services/notification_service.dart';
@@ -33,7 +34,7 @@ class _StudentShellState extends State<StudentShell> {
         final pages = <Widget>[
           CatalogTab(user: widget.user),
           SearchTab(user: widget.user),
-          const _TabPlaceholder(title: 'My Library'),
+          LibraryTab(user: widget.user),
           AlertsTab(notes: notes, hasError: snap.hasError),
           _SettingsPlaceholder(user: widget.user),
         ];
@@ -85,24 +86,6 @@ class _StudentShellState extends State<StudentShell> {
           ),
         );
       },
-    );
-  }
-}
-
-class _TabPlaceholder extends StatelessWidget {
-  final String title;
-  const _TabPlaceholder({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Text(
-          'Coming soon',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ),
     );
   }
 }

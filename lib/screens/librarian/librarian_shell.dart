@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'qr_scanner_tab.dart';
 import 'history_tab.dart';
 import 'borrowing_tab.dart';
 import 'books_tab.dart';
@@ -22,7 +23,7 @@ class _LibrarianShellState extends State<LibrarianShell> {
   List<Widget> get _pages => [
     _TabPlaceholder(title: 'Dashboard', user: widget.user),
     BooksTab(user: widget.user),
-    const _TabPlaceholder(title: 'QR Scanner'),
+    QrScannerTab(user: widget.user, active: _index == 2),
     BorrowingTab(user: widget.user, active: _index == 3),
     const HistoryTab(),
   ];

@@ -49,6 +49,7 @@ class _AccountGateState extends State<AccountGate> {
           return StatusScreen(
             icon: Icons.person_off_outlined,
             title: 'No account found',
+         
             message:
                 '${widget.user.email} is not registered yet. Sign up as a student first, or ask the administrator to add your account.',
           );

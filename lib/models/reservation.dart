@@ -7,7 +7,7 @@ class Reservation {
   final String studentEmail;
   final String studentName;
   final String? studentId;
-  final String status; // pending | accepted | denied | expired | dropped | picked_up | returned
+  final String status; // pending | accepted | denied | expired | dropped | cancelled | picked_up | returned
   final DateTime? createdAt;
   final DateTime? pickupDeadline; // set when accepted
   final DateTime? dueAt; // set when picked up
