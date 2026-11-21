@@ -14,6 +14,8 @@ class AppUser {
   final String? lastName;
   final DateTime? authorizedAt;
   final DateTime? createdAt;
+  final List<String> preferredGenres;
+  final bool genresPrompted; // true once the student picked genres or skipped
 
   const AppUser({
     required this.email,
@@ -29,6 +31,8 @@ class AppUser {
     this.middleName,
     this.lastName,
     this.authorizedAt,
+    this.preferredGenres = const [],
+    this.genresPrompted = false,
   });
 
   factory AppUser.fromMap(String email, Map<String, dynamic> d) => AppUser(
@@ -45,6 +49,10 @@ class AppUser {
     middleName: d['middleName'] as String?,
     lastName: d['lastName'] as String?,
     authorizedAt: (d['authorizedAt'] as Timestamp?)?.toDate(),
+    preferredGenres: List<String>.from(
+      (d['preferredGenres'] ?? const []) as List,
+    ),
+    genresPrompted: (d['genresPrompted'] ?? false) as bool,
   );
 
   /// Name parts for the edit form; falls back to splitting the full name.

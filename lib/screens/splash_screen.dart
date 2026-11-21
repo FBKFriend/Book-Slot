@@ -21,10 +21,10 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    // Whole animation = 4000ms
+    // Whole animation = 3000ms
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 4000),
+      duration: const Duration(milliseconds: 3000),
     );
 
     // Fade in (30%), hold (40%), fade out (30%)

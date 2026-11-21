@@ -1,5 +1,7 @@
 import 'student/student_shell.dart';
 import 'superadmin/superadmin_shell.dart';
+import 'student/genre_onboarding_screen.dart';
+import 'sign_up_screen.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -49,9 +51,15 @@ class _AccountGateState extends State<AccountGate> {
           return StatusScreen(
             icon: Icons.person_off_outlined,
             title: 'No account found',
-         
+
             message:
                 '${widget.user.email} is not registered yet. Sign up as a student first, or ask the administrator to add your account.',
+            extra: ElevatedButton(
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const SignUpScreen())),
+              child: const Text('Sign up as a student'),
+            ),
           );
         }
         switch (me.status) {
@@ -62,7 +70,9 @@ class _AccountGateState extends State<AccountGate> {
               case 'librarian':
                 return LibrarianShell(user: me);
               default:
-                return StudentShell(user: me);
+                return me.genresPrompted
+                    ? StudentShell(user: me)
+                    : GenreOnboardingScreen(user: me);
             }
           case 'suspended':
             return const StatusScreen(
@@ -86,11 +96,13 @@ class StatusScreen extends StatelessWidget {
   final IconData icon;
   final String title;
   final String message;
+  final Widget? extra; // optional button shown above Sign out
   const StatusScreen({
     super.key,
     required this.icon,
     required this.title,
     required this.message,
+    this.extra,
   });
 
   @override
@@ -109,6 +121,7 @@ class StatusScreen extends StatelessWidget {
               const SizedBox(height: 10),
               Text(message, style: t.bodyMedium, textAlign: TextAlign.center),
               const SizedBox(height: 28),
+              if (extra != null) ...[extra!, const SizedBox(height: 12)],
               ElevatedButton(
                 onPressed: () => AuthService.instance.signOut(),
                 child: const Text('Sign out'),

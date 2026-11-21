@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/app_user.dart';
@@ -40,24 +39,6 @@ class _UsersTabState extends State<UsersTab> {
               icon: const Icon(Icons.person_add_alt_1_outlined),
               onPressed: () => showAddLibrarianSheet(context),
             ),
-            if (kDebugMode)
-              IconButton(
-                tooltip: 'Add sample students (testing)',
-                icon: const Icon(Icons.science_outlined),
-                onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  try {
-                    await UserService.instance.seedSampleStudents();
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('Added sample students')),
-                    );
-                  } catch (e) {
-                    messenger.showSnackBar(
-                      SnackBar(content: Text('Seeding failed: $e')),
-                    );
-                  }
-                },
-              ),
           ],
           bottom: const TabBar(
             dividerColor: AppColors.border,

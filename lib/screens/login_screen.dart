@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'sign_up_screen.dart';
 import '../services/auth_service.dart';
 import '../theme/app_colors.dart';
 
@@ -100,6 +101,29 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const Spacer(flex: 4),
               _googleButton(),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: _loading
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SignUpScreen()),
+                      ),
+                child: Text.rich(
+                  TextSpan(
+                    text: 'New student? ',
+                    style: t.bodySmall,
+                    children: const [
+                      TextSpan(
+                        text: 'Sign up',
+                        style: TextStyle(
+                          color: AppColors.gold,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 14),
               Text(
                 'Only authorized Granby accounts can sign in',

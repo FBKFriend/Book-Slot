@@ -130,6 +130,44 @@ class UserService {
     });
   }
 
+  /// A student signs up: creates their own record as pending.
+  Future<void> registerStudent({
+    required String email,
+    required String first,
+    required String middle,
+    required String last,
+    required String studentId,
+    required int age,
+    required String sex,
+    required String course,
+  }) {
+    final id = email.trim().toLowerCase();
+    final ref = _db.collection('users').doc(id);
+    return _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (snap.exists) throw const AccountExistsException();
+      tx.set(ref, {
+        'email': id,
+        'role': 'student',
+        'status': 'pending',
+        ...nameFields(first, middle, last),
+        'studentId': studentId,
+        'age': age,
+        'sex': sex,
+        'course': course.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  /// A student saves their own preferred genres (empty list = skipped).
+  Future<void> savePreferredGenres(String email, List<String> genres) {
+    return _db.collection('users').doc(email.toLowerCase()).update({
+      'preferredGenres': genres,
+      'genresPrompted': true,
+    });
+  }
+
   Future<void> _updateAndLog({
     required String email,
     required Map<String, Object?> changes,
@@ -197,58 +235,5 @@ class UserService {
         ),
       );
     });
-  }
-
-  /// TESTING ONLY: creates fake students. Remove before release.
-  Future<void> seedSampleStudents() async {
-    final samples = [
-      {
-        'email': 'maria.santos@example.com',
-        'fullName': 'Maria Clara Santos',
-        'studentId': 'GC-260001',
-        'age': 19,
-        'sex': 'Female',
-        'course': 'BSIT',
-        'status': 'pending',
-      },
-      {
-        'email': 'juan.reyes@example.com',
-        'fullName': 'Juan Miguel Reyes',
-        'studentId': 'GC-260002',
-        'age': 20,
-        'sex': 'Male',
-        'course': 'BSCS',
-        'status': 'pending',
-      },
-      {
-        'email': 'ana.lopez@example.com',
-        'fullName': 'Ana Beatriz Lopez',
-        'studentId': 'GC-250148',
-        'age': 21,
-        'sex': 'Female',
-        'course': 'BSIT',
-        'status': 'active',
-      },
-      {
-        'email': 'very.long.email.address.for.testing.ellipsis@example.com',
-        'fullName': 'Maximilian Bartholomew Fernandez-Villanueva',
-        'studentId': 'GC-250099',
-        'age': 22,
-        'sex': 'Male',
-        'course': 'BSIT',
-        'status': 'suspended',
-      },
-    ];
-    final batch = _db.batch();
-    for (final s in samples) {
-      batch.set(_db.collection('users').doc(s['email'] as String), {
-        ...s,
-        'role': 'student',
-        'createdAt': FieldValue.serverTimestamp(),
-        if (s['status'] != 'pending')
-          'authorizedAt': FieldValue.serverTimestamp(),
-      });
-    }
-    await batch.commit();
   }
 }
