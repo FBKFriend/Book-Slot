@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'student_history_screen.dart';
 import '../../models/app_user.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
@@ -129,6 +130,47 @@ class _StudentSettingsTabState extends State<StudentSettingsTab> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.edit_outlined, size: 20),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StudentHistoryScreen(user: widget.user),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.history, color: AppColors.gold),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'History',
+                            style: TextStyle(
+                              color: AppColors.heading,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Your reservations and borrowed books',
+                            style: t.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right),
                   ],
                 ),
               ),

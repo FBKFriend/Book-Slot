@@ -11,6 +11,9 @@ class Reservation {
   final DateTime? createdAt;
   final DateTime? pickupDeadline; // set when accepted
   final DateTime? dueAt; // set when picked up
+  final DateTime? decidedAt; // when it was accepted or denied
+  final DateTime? pickedUpAt;
+  final DateTime? returnedAt;
 
   const Reservation({
     required this.id,
@@ -23,6 +26,9 @@ class Reservation {
     this.createdAt,
     this.pickupDeadline,
     this.dueAt,
+    this.decidedAt,
+    this.pickedUpAt,
+    this.returnedAt,
   });
 
   bool get isActive => status == 'pending' || status == 'accepted';
@@ -39,5 +45,8 @@ class Reservation {
     createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
     pickupDeadline: (d['pickupDeadline'] as Timestamp?)?.toDate(),
     dueAt: (d['dueAt'] as Timestamp?)?.toDate(),
+    decidedAt: (d['decidedAt'] as Timestamp?)?.toDate(),
+    pickedUpAt: (d['pickedUpAt'] as Timestamp?)?.toDate(),
+    returnedAt: (d['returnedAt'] as Timestamp?)?.toDate(),
   );
 }
