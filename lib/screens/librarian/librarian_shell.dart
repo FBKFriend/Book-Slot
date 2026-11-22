@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'librarian_dashboard_tab.dart';
 import 'qr_scanner_tab.dart';
 import 'history_tab.dart';
 import 'borrowing_tab.dart';
 import 'books_tab.dart';
 import '../../models/app_user.dart';
-import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 
 class LibrarianShell extends StatefulWidget {
@@ -21,7 +21,10 @@ class _LibrarianShellState extends State<LibrarianShell> {
 
   // A getter, so the Borrowing tab knows when it becomes the visible tab
   List<Widget> get _pages => [
-    _TabPlaceholder(title: 'Dashboard', user: widget.user),
+    LibrarianDashboardTab(
+      user: widget.user,
+      onOpenBorrowing: () => setState(() => _index = 3),
+    ),
     BooksTab(user: widget.user),
     QrScannerTab(user: widget.user, active: _index == 2),
     BorrowingTab(user: widget.user, active: _index == 3),
@@ -79,82 +82,6 @@ class _LibrarianShellState extends State<LibrarianShell> {
               label: 'History',
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TabPlaceholder extends StatelessWidget {
-  final String title;
-  final AppUser? user; // only the Dashboard shows the account button
-  const _TabPlaceholder({required this.title, this.user});
-
-  void _showAccount(BuildContext context, AppUser u) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        final t = Theme.of(ctx).textTheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  u.name.isEmpty ? 'Librarian' : u.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: t.titleLarge,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  u.email,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: t.bodySmall,
-                ),
-                const SizedBox(height: 4),
-                Text('Librarian', style: t.bodySmall),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    AuthService.instance.signOut();
-                  },
-                  child: const Text('Sign out'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          if (user != null)
-            IconButton(
-              tooltip: 'Account',
-              icon: const Icon(Icons.account_circle_outlined),
-              onPressed: () => _showAccount(context, user!),
-            ),
-        ],
-      ),
-      body: Center(
-        child: Text(
-          'Coming soon',
-          style: Theme.of(context).textTheme.bodySmall,
         ),
       ),
     );

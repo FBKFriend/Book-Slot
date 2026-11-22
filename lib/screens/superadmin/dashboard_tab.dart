@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../models/dashboard_stats.dart';
+import '../../services/dashboard_service.dart';
 import '../../services/user_service.dart';
 import '../../theme/app_colors.dart';
 
@@ -14,6 +18,23 @@ class DashboardTab extends StatefulWidget {
 class _DashboardTabState extends State<DashboardTab> {
   late final Stream<UserCounts> _stream = UserService.instance
       .watchUserCounts();
+
+  DashboardStats? _stats; // null until the first numbers arrive
+  StreamSubscription<DashboardStats>? _statsSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _statsSub = DashboardService.instance.watch().listen((s) {
+      if (mounted) setState(() => _stats = s);
+    }, onError: (_) {});
+  }
+
+  @override
+  void dispose() {
+    _statsSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +50,7 @@ class _DashboardTabState extends State<DashboardTab> {
             return const Center(child: CircularProgressIndicator());
           }
           final c = snap.data!;
+          final s = _stats;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -54,29 +76,30 @@ class _DashboardTabState extends State<DashboardTab> {
                     label: 'Librarians',
                     value: '${c.librarians}',
                   ),
-                  const _StatCard(
+                  _StatCard(
                     icon: Icons.menu_book_outlined,
                     label: 'Books in library',
+                    value: s == null ? null : '${s.titles}',
+                    caption: s == null
+                        ? null
+                        : '${s.totalCopies} ${s.totalCopies == 1 ? 'copy' : 'copies'}',
                   ),
-                  const _StatCard(
+                  _StatCard(
                     icon: Icons.swap_horiz,
                     label: 'Active borrowings',
+                    value: s == null ? null : '${s.borrowedNow}',
                   ),
-                  const _StatCard(
+                  _StatCard(
                     icon: Icons.warning_amber_rounded,
                     label: 'Overdue borrowings',
+                    value: s == null ? null : '${s.overdue}',
                   ),
-                  const _StatCard(
+                  _StatCard(
                     icon: Icons.calendar_month_outlined,
                     label: 'Borrowed this month',
+                    value: s == null ? null : '${s.borrowedThisMonth}',
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Book and borrowing numbers will appear once the librarian side is built.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           );
@@ -90,8 +113,14 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String? value; // null = not available yet
+  final String? caption; // small line under the label
 
-  const _StatCard({required this.icon, required this.label, this.value});
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    this.value,
+    this.caption,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +148,14 @@ class _StatCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (caption != null)
+              Text(
+                caption!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(fontSize: 11),
+              ),
           ],
         ),
       ),
