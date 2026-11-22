@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'reports_tab.dart';
 import 'settings_tab.dart';
 import 'dashboard_tab.dart';
 import 'users_tab.dart';
@@ -21,7 +22,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
   late final List<Widget> _pages = [
     const DashboardTab(),
     const UsersTab(),
-    const _TabPlaceholder(title: 'Reports & Analytics'),
+    const ReportsTab(),
     const AuditTab(),
     SettingsTab(user: widget.user),
   ];
@@ -64,29 +65,6 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
               selectedIcon: Icon(Icons.settings),
               label: 'Settings',
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TabPlaceholder extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-  // ignore: unused_element_parameter
-  const _TabPlaceholder({required this.title, this.children = const []});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Coming soon', style: Theme.of(context).textTheme.bodySmall),
-            ...children,
           ],
         ),
       ),
