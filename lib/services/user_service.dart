@@ -1,4 +1,5 @@
 import 'audit_service.dart';
+import '../data/legal_text.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -156,6 +157,9 @@ class UserService {
         'sex': sex,
         'course': course.trim(),
         'createdAt': FieldValue.serverTimestamp(),
+        'termsAcceptedAt': FieldValue.serverTimestamp(),
+        'privacyAcceptedAt': FieldValue.serverTimestamp(),
+        'legalVersion': kLegalVersion,
       });
     });
   }
@@ -165,6 +169,34 @@ class UserService {
     return _db.collection('users').doc(email.toLowerCase()).update({
       'preferredGenres': genres,
       'genresPrompted': true,
+    });
+  }
+
+  /// Student ticks the agreement box(es), in Settings or on the accept screen.
+  Future<void> acceptLegal(
+    String email, {
+    bool terms = false,
+    bool privacy = false,
+  }) {
+    return _db.collection('users').doc(email.toLowerCase()).update({
+      if (terms) 'termsAcceptedAt': FieldValue.serverTimestamp(),
+      if (privacy) 'privacyAcceptedAt': FieldValue.serverTimestamp(),
+      'legalVersion': kLegalVersion,
+      'legalWithdrawn': false,
+    });
+  }
+
+  /// Student unticks a box: the agreement is withdrawn and they must
+  /// accept again before using the app.
+  Future<void> withdrawLegal(
+    String email, {
+    bool terms = false,
+    bool privacy = false,
+  }) {
+    return _db.collection('users').doc(email.toLowerCase()).update({
+      if (terms) 'termsAcceptedAt': FieldValue.delete(),
+      if (privacy) 'privacyAcceptedAt': FieldValue.delete(),
+      'legalWithdrawn': true,
     });
   }
 

@@ -2,6 +2,7 @@ import 'student/student_shell.dart';
 import 'superadmin/superadmin_shell.dart';
 import 'student/genre_onboarding_screen.dart';
 import 'sign_up_screen.dart';
+import 'student/legal_accept_screen.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -70,6 +71,7 @@ class _AccountGateState extends State<AccountGate> {
               case 'librarian':
                 return LibrarianShell(user: me);
               default:
+                if (me.legalWithdrawn) return LegalAcceptScreen(user: me);
                 return me.genresPrompted
                     ? StudentShell(user: me)
                     : GenreOnboardingScreen(user: me);

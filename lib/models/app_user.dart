@@ -16,6 +16,10 @@ class AppUser {
   final DateTime? createdAt;
   final List<String> preferredGenres;
   final bool genresPrompted; // true once the student picked genres or skipped
+  final DateTime? termsAcceptedAt;
+  final DateTime? privacyAcceptedAt;
+  final String? legalVersion;
+  final bool legalWithdrawn; // student unticked the agreement
 
   const AppUser({
     required this.email,
@@ -33,6 +37,10 @@ class AppUser {
     this.authorizedAt,
     this.preferredGenres = const [],
     this.genresPrompted = false,
+    this.termsAcceptedAt,
+    this.privacyAcceptedAt,
+    this.legalVersion,
+    this.legalWithdrawn = false,
   });
 
   factory AppUser.fromMap(String email, Map<String, dynamic> d) => AppUser(
@@ -53,6 +61,10 @@ class AppUser {
       (d['preferredGenres'] ?? const []) as List,
     ),
     genresPrompted: (d['genresPrompted'] ?? false) as bool,
+    termsAcceptedAt: (d['termsAcceptedAt'] as Timestamp?)?.toDate(),
+    privacyAcceptedAt: (d['privacyAcceptedAt'] as Timestamp?)?.toDate(),
+    legalVersion: d['legalVersion'] as String?,
+    legalWithdrawn: (d['legalWithdrawn'] ?? false) as bool,
   );
 
   /// Name parts for the edit form; falls back to splitting the full name.

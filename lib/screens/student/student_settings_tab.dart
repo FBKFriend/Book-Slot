@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../data/legal_text.dart';
+import '../../utils/format.dart';
+import '../../widgets/legal_checkbox.dart';
+import '../../widgets/legal_dialog.dart';
 import 'student_history_screen.dart';
 import '../../models/app_user.dart';
 import '../../services/auth_service.dart';
@@ -18,6 +22,7 @@ class StudentSettingsTab extends StatefulWidget {
 
 class _StudentSettingsTabState extends State<StudentSettingsTab> {
   bool _saving = false;
+  bool _legalBusy = false;
 
   Future<void> _editGenres() async {
     final picked = await showGenrePicker(
@@ -44,6 +49,59 @@ class _StudentSettingsTabState extends State<StudentSettingsTab> {
       );
     }
     if (mounted) setState(() => _saving = false);
+  }
+
+  Future<void> _toggleLegal({required bool terms, required bool agree}) async {
+    final email = widget.user.email;
+    final name = terms ? 'Terms of Service' : 'Privacy Policy';
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (!agree) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Withdraw your agreement?'),
+          content: Text(
+            'If you withdraw your agreement to the $name, you will be signed out and must accept again before you can use BookSlot.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Keep it'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Withdraw and sign out'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+
+    setState(() => _legalBusy = true);
+    try {
+      if (agree) {
+        await UserService.instance.acceptLegal(
+          email,
+          terms: terms,
+          privacy: !terms,
+        );
+      } else {
+        await UserService.instance.withdrawLegal(
+          email,
+          terms: terms,
+          privacy: !terms,
+        );
+        await AuthService.instance.signOut();
+      }
+    } catch (e) {
+      debugPrint('legal update failed: $e');
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not save. Please try again.')),
+      );
+    }
+    if (mounted) setState(() => _legalBusy = false);
   }
 
   @override
@@ -173,6 +231,44 @@ class _StudentSettingsTabState extends State<StudentSettingsTab> {
                     const Icon(Icons.chevron_right),
                   ],
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text('Legal', style: t.titleLarge),
+          const SizedBox(height: 10),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Column(
+                children: [
+                  LegalCheckbox(
+                    value: u.termsAcceptedAt != null,
+                    onChanged: _legalBusy
+                        ? null
+                        : (v) => _toggleLegal(terms: true, agree: v),
+                    leading: 'I agree to the ',
+                    linkText: 'Terms of Service',
+                    caption: u.termsAcceptedAt == null
+                        ? 'Not accepted yet'
+                        : 'Accepted on ${formatDate(u.termsAcceptedAt!)}',
+                    onOpen: () => showLegalDialog(context, kTermsOfService),
+                  ),
+                  const Divider(color: AppColors.border, height: 1),
+                  LegalCheckbox(
+                    value: u.privacyAcceptedAt != null,
+                    onChanged: _legalBusy
+                        ? null
+                        : (v) => _toggleLegal(terms: false, agree: v),
+                    leading: 'I agree to the ',
+                    linkText: 'Privacy Policy',
+                    caption: u.privacyAcceptedAt == null
+                        ? 'Not accepted yet'
+                        : 'Accepted on ${formatDate(u.privacyAcceptedAt!)}',
+                    onOpen: () => showLegalDialog(context, kPrivacyPolicy),
+                  ),
+                ],
               ),
             ),
           ),

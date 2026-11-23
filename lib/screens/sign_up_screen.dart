@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../data/legal_text.dart';
+import '../widgets/legal_checkbox.dart';
+import '../widgets/legal_dialog.dart';
 import '../models/app_user.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
@@ -148,6 +151,8 @@ class _RegistrationStepState extends State<_RegistrationStep> {
   final _age = TextEditingController();
   final _course = TextEditingController();
   String? _sex;
+  bool _acceptTerms = false;
+  bool _acceptPrivacy = false;
   bool _saving = false;
   bool _justSubmitted = false;
   String? _error;
@@ -165,6 +170,7 @@ class _RegistrationStepState extends State<_RegistrationStep> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_acceptTerms || !_acceptPrivacy) return;
     if (_sex == null) {
       setState(() => _error = 'Please select your sex.');
       return;
@@ -363,13 +369,31 @@ class _RegistrationStepState extends State<_RegistrationStep> {
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        LegalCheckbox(
+          value: _acceptTerms,
+          onChanged: _saving ? null : (v) => setState(() => _acceptTerms = v),
+          leading: 'I agree to the ',
+          linkText: 'Terms of Service',
+          onOpen: () => showLegalDialog(context, kTermsOfService),
+        ),
+        LegalCheckbox(
+          value: _acceptPrivacy,
+          onChanged: _saving ? null : (v) => setState(() => _acceptPrivacy = v),
+          leading: 'I have read the ',
+          linkText: 'Privacy Policy',
+          trailing: ' and consent to the handling of my personal data.',
+          onOpen: () => showLegalDialog(context, kPrivacyPolicy),
+        ),
         if (_error != null) ...[
           const SizedBox(height: 12),
           Text(_error!, style: const TextStyle(color: Color(0xFFE57373))),
         ],
         const SizedBox(height: 20),
         ElevatedButton(
-          onPressed: _saving ? null : _submit,
+          onPressed: (_saving || !_acceptTerms || !_acceptPrivacy)
+              ? null
+              : _submit,
           child: _saving
               ? const SizedBox(
                   width: 20,

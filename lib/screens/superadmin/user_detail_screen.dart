@@ -114,6 +114,11 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                       if (u.role == 'student') ...[
                         _InfoRow('Registered', _date(u.createdAt)),
                         _InfoRow('Authorized', _date(u.authorizedAt)),
+                        _InfoRow('Terms accepted', _date(u.termsAcceptedAt)),
+                        _InfoRow(
+                          'Privacy accepted',
+                          _date(u.privacyAcceptedAt),
+                        ),
                       ] else
                         _InfoRow('Date created', _date(u.createdAt)),
                     ],
