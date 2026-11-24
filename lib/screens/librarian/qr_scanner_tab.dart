@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../models/return_incident.dart';
+import '../../services/fine_service.dart';
+import '../../widgets/return_incident_form.dart';
 import '../../models/app_user.dart';
 import '../../services/book_service.dart';
 import '../../services/borrowing_service.dart';
@@ -126,6 +129,9 @@ class _QrScannerTabState extends State<QrScannerTab>
     if (e is BorrowingChangedException) {
       return 'This book was already returned.';
     }
+    if (e is UnpaidFineException) {
+      return 'This student has an unpaid fine and cannot pick up books until it is paid.';
+    }
     return 'Something went wrong. Please try again.';
   }
 
@@ -184,7 +190,7 @@ class _QrScannerTabState extends State<QrScannerTab>
       return;
     }
 
-    final ok = await showModalBottomSheet<bool>(
+    final decision = await showModalBottomSheet<ReturnDecision>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.card,
@@ -193,7 +199,7 @@ class _QrScannerTabState extends State<QrScannerTab>
       ),
       builder: (_) => _ConfirmSheet(result: result),
     );
-    if (ok != true || !mounted) return;
+    if (decision == null || !mounted) return;
 
     final isPickup = result.kind == QrKind.pickup;
     try {
@@ -207,8 +213,16 @@ class _QrScannerTabState extends State<QrScannerTab>
         await BorrowingService.instance.returnBook(
           result.borrowing!,
           staff: widget.user,
+          incident: decision.incident,
         );
-        _snack('Return confirmed. The book is back in stock.');
+        final inc = decision.incident;
+        _snack(
+          inc == null || !inc.hasFine
+              ? 'Return confirmed. The book is back in stock.'
+              : inc.discarded
+              ? 'Return confirmed. Fine recorded and the copy was removed from the total.'
+              : 'Return confirmed. Fine recorded.',
+        );
       }
     } catch (e) {
       debugPrint('confirm failed: $e');
@@ -315,13 +329,22 @@ class _QrScannerTabState extends State<QrScannerTab>
   }
 }
 
-class _ConfirmSheet extends StatelessWidget {
+class _ConfirmSheet extends StatefulWidget {
   final ScanResult result;
   const _ConfirmSheet({required this.result});
 
   @override
+  State<_ConfirmSheet> createState() => _ConfirmSheetState();
+}
+
+class _ConfirmSheetState extends State<_ConfirmSheet> {
+  ReturnIncident? _incident;
+  bool _incidentValid = true;
+
+  @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
+    final result = widget.result;
     final isPickup = result.kind == QrKind.pickup;
     final r = result.reservation!;
     final book = result.book;
@@ -335,122 +358,143 @@ class _ConfirmSheet extends StatelessWidget {
     final accent = (!isPickup && overdue)
         ? const Color(0xFFE57373)
         : AppColors.gold;
+    final canConfirm = isPickup || _incidentValid;
 
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isPickup ? 'Confirm pickup' : 'Confirm return',
-              style: t.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                BookCover(
-                  bookId: r.bookId,
-                  version: book?.coverVersion ?? 0,
-                  width: 72,
-                  height: 108,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        r.bookTitle,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: t.titleMedium?.copyWith(
-                          color: AppColors.heading,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if ((book?.author ?? '').isNotEmpty)
-                        Text(book!.author, style: t.bodyMedium),
-                      const SizedBox(height: 2),
-                      Text(r.bookId, style: t.bodySmall),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const Divider(color: AppColors.border, height: 28),
-            Text('Student', style: t.bodySmall),
-            const SizedBox(height: 2),
-            Text(
-              student,
-              style: const TextStyle(
-                color: AppColors.heading,
-                fontWeight: FontWeight.w600,
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isPickup ? 'Confirm pickup' : 'Confirm return',
+                style: t.titleLarge,
               ),
-            ),
-            Text(studentSub, style: t.bodySmall),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(
-                  isPickup
-                      ? Icons.schedule
-                      : (overdue
-                            ? Icons.warning_amber_rounded
-                            : Icons.event_outlined),
-                  size: 16,
-                  color: accent,
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  BookCover(
+                    bookId: r.bookId,
+                    version: book?.coverVersion ?? 0,
+                    width: 72,
+                    height: 108,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          r.bookTitle,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.titleMedium?.copyWith(
+                            color: AppColors.heading,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if ((book?.author ?? '').isNotEmpty)
+                          Text(book!.author, style: t.bodyMedium),
+                        const SizedBox(height: 2),
+                        Text(r.bookId, style: t.bodySmall),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(color: AppColors.border, height: 28),
+              Text('Student', style: t.bodySmall),
+              const SizedBox(height: 2),
+              Text(
+                student,
+                style: const TextStyle(
+                  color: AppColors.heading,
+                  fontWeight: FontWeight.w600,
                 ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
+              ),
+              Text(studentSub, style: t.bodySmall),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(
                     isPickup
-                        ? (r.pickupDeadline == null
-                              ? 'Approved reservation'
-                              : 'Pick up by ${formatDate(r.pickupDeadline!)}')
-                        : (due == null
-                              ? 'No due date'
-                              : overdue
-                              ? 'Overdue · was due ${formatDate(due)}'
-                              : 'Due ${formatDate(due)}'),
-                    style: TextStyle(color: accent, fontSize: 13),
+                        ? Icons.schedule
+                        : (overdue
+                              ? Icons.warning_amber_rounded
+                              : Icons.event_outlined),
+                    size: 16,
+                    color: accent,
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              isPickup ? 'Hand over the book shown above after you confirm.' : 'Make sure the book in your hands matches the one shown above.',
-              style: t.bodySmall,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      side: const BorderSide(color: AppColors.border),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      isPickup
+                          ? (r.pickupDeadline == null
+                                ? 'Approved reservation'
+                                : 'Pick up by ${formatDate(r.pickupDeadline!)}')
+                          : (due == null
+                                ? 'No due date'
+                                : overdue
+                                ? 'Overdue · was due ${formatDate(due)}'
+                                : 'Due ${formatDate(due)}'),
+                      style: TextStyle(color: accent, fontSize: 13),
                     ),
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Cancel'),
                   ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isPickup ? 'Hand over the book shown above after you confirm.' : 'Make sure the book in your hands matches the one shown above.',
+                style: t.bodySmall,
+              ),
+              if (!isPickup)
+                ReturnIncidentForm(
+                  daysLate: (overdue && due != null) ? daysLateOf(due) : 0,
+                  onChanged: (incident, valid) => setState(() {
+                    _incident = incident;
+                    _incidentValid = valid;
+                  }),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        side: const BorderSide(color: AppColors.border),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
                     ),
-                    onPressed: () => Navigator.pop(context, true),
-                    child: Text(isPickup ? 'Confirm pickup' : 'Confirm return'),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      onPressed: canConfirm
+                          ? () => Navigator.pop(
+                              context,
+                              ReturnDecision(isPickup ? null : _incident),
+                            )
+                          : null,
+                      child: Text(
+                        isPickup ? 'Confirm pickup' : 'Confirm return',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

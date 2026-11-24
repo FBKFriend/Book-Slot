@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import 'fine_service.dart';
 import '../models/app_user.dart';
 import '../models/book.dart';
 import '../models/reservation.dart';
@@ -89,6 +90,10 @@ class ReservationService {
     final settings = SystemSettings.fromMap(
       (await _db.collection('settings').doc('system').get()).data(),
     );
+    final fines = await _db.collection('fineSummaries').doc(user.email).get();
+    if (((fines.data()?['unpaidCount'] ?? 0) as num) > 0) {
+      throw const UnpaidFineException();
+    }
 
     // Filtered here (not in the query) so no extra index is needed
     final mine = await _db
@@ -161,6 +166,12 @@ class ReservationService {
       final settings = SystemSettings.fromMap(
         (await tx.get(settingsRef)).data(),
       );
+      final fineSummary = (await tx.get(
+        _db.collection('fineSummaries').doc(r.studentEmail),
+      )).data();
+      if (((fineSummary?['unpaidCount'] ?? 0) as num) > 0) {
+        throw const UnpaidFineException();
+      }
 
       final available = ((book['availableCopies'] ?? 0) as num).toInt();
       final reserved = ((book['reservedCopies'] ?? 0) as num).toInt();
@@ -394,6 +405,74 @@ class ReservationService {
           details: '${r.bookId} - ${r.bookTitle}',
         ),
       );
+    });
+  }
+
+  /// A student was fined: every request of theirs that is still pending or
+  /// approved is dropped, and held copies are released.
+  Future<int> dropAllForFine({
+    required String studentEmail,
+    required String actorRole,
+  }) async {
+    final snap = await _db
+        .collection('reservations')
+        .where('studentEmail', isEqualTo: studentEmail)
+        .get();
+    var count = 0;
+    for (final d in snap.docs) {
+      final r = Reservation.fromDoc(d.id, d.data());
+      if (!r.isActive) continue;
+      try {
+        if (await _dropForFine(r, actorRole)) count++;
+      } catch (e) {
+        debugPrint('drop for fine ${r.id} failed: $e');
+      }
+    }
+    return count;
+  }
+
+  Future<bool> _dropForFine(Reservation r, String actorRole) {
+    final resRef = _db.collection('reservations').doc(r.id);
+    final bookRef = _db.collection('books').doc(r.bookId);
+    final noteRef = _db.collection('notifications').doc();
+    final logRef = AuditService.instance.newRef();
+
+    return _db.runTransaction<bool>((tx) async {
+      final snap = await tx.get(resRef);
+      final status = snap.data()?['status'];
+      if (status != 'pending' && status != 'accepted') return false;
+
+      Map<String, dynamic>? book;
+      if (status == 'accepted') book = (await tx.get(bookRef)).data();
+
+      if (book != null) {
+        final reserved = ((book['reservedCopies'] ?? 0) as num).toInt();
+        tx.update(bookRef, {'reservedCopies': reserved > 0 ? reserved - 1 : 0});
+      }
+      tx.update(resRef, {'status': 'dropped'});
+      tx.set(
+        noteRef,
+        _note(
+          toEmail: r.studentEmail,
+          type: 'reservation_dropped',
+          title: 'Reservation cancelled',
+          message:
+              'Your reservation for "${r.bookTitle}" was cancelled because you have an unpaid fine. Please settle it at the library.',
+          bookId: r.bookId,
+        ),
+      );
+      tx.set(
+        logRef,
+        AuditService.instance.entryData(
+          action: 'reservation.drop',
+          category: 'reservations',
+          actorRole: actorRole,
+          targetEmail: r.studentEmail,
+          targetName: r.studentName,
+          details: '${r.bookId} - ${r.bookTitle}\nStudent has an unpaid fine',
+        ),
+      );
+      return true;
     });
   }
 }

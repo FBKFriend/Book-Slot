@@ -13,6 +13,9 @@ class HistoryEntry {
   final String staffName;
   final DateTime? dueAt;
   final bool overdue; // for returns: was it late?
+  final int? amount; // fines: whole pesos
+  final String? detail; // fines: reason, damage: what is wrong
+  final String? fineId;
   final DateTime? createdAt;
 
   const HistoryEntry({
@@ -28,6 +31,9 @@ class HistoryEntry {
     this.studentId,
     this.dueAt,
     this.createdAt,
+    this.amount,
+    this.detail,
+    this.fineId,
   });
 
   factory HistoryEntry.fromDoc(String id, Map<String, dynamic> d) =>
@@ -43,6 +49,9 @@ class HistoryEntry {
         staffName: (d['staffName'] ?? '') as String,
         dueAt: (d['dueAt'] as Timestamp?)?.toDate(),
         overdue: (d['overdue'] ?? false) as bool,
+        amount: (d['amount'] as num?)?.toInt(),
+        detail: d['detail'] as String?,
+        fineId: d['fineId'] as String?,
         createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
       );
 }

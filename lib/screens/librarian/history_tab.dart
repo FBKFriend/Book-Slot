@@ -21,7 +21,22 @@ class _HistoryTabState extends State<HistoryTab> {
     'all': 'All',
     'borrow': 'Borrowed',
     'return': 'Returned',
+    'fines': 'Fines & payments',
+    'damage': 'Damage reports',
   };
+
+  bool _typeMatches(String type) {
+    switch (_type) {
+      case 'all':
+        return true;
+      case 'fines':
+        return type == 'fine' || type == 'fine_paid';
+      case 'damage':
+        return type == 'damage_functional' || type == 'damage_discarded';
+      default:
+        return type == _type;
+    }
+  }
 
   final _search = TextEditingController();
   String _query = '';
@@ -73,7 +88,7 @@ class _HistoryTabState extends State<HistoryTab> {
   }
 
   bool _matches(HistoryEntry e, String q) {
-    if (_type != 'all' && e.type != _type) return false;
+    if (!_typeMatches(e.type)) return false;
     if (q.isEmpty) return true;
     return e.studentName.toLowerCase().contains(q) ||
         (e.studentId ?? '').toLowerCase().contains(q) ||
@@ -205,10 +220,29 @@ class _HistoryCard extends StatelessWidget {
   final HistoryEntry e;
   const _HistoryCard(this.e);
 
+  (String, IconData) get _look {
+    switch (e.type) {
+      case 'borrow':
+        return ('Borrowed', Icons.north_east);
+      case 'return':
+        return ('Returned', Icons.south_west);
+      case 'fine':
+        return ('Fine issued', Icons.request_quote_outlined);
+      case 'fine_paid':
+        return ('Fine paid', Icons.paid_outlined);
+      case 'damage_functional':
+        return ('Damaged · still functional', Icons.build_outlined);
+      case 'damage_discarded':
+        return ('Damaged · to be discarded', Icons.delete_sweep_outlined);
+      default:
+        return (e.type, Icons.receipt_long_outlined);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final isBorrow = e.type == 'borrow';
+    final (title, icon) = _look;
     final student = e.studentName.isEmpty ? e.studentEmail : e.studentName;
     final studentLine = (e.studentId ?? '').isEmpty
         ? student
@@ -224,11 +258,7 @@ class _HistoryCard extends StatelessWidget {
           children: [
             CircleAvatar(
               backgroundColor: AppColors.background,
-              child: Icon(
-                isBorrow ? Icons.north_east : Icons.south_west,
-                color: AppColors.gold,
-                size: 20,
-              ),
+              child: Icon(icon, color: AppColors.gold, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -237,14 +267,16 @@ class _HistoryCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        isBorrow ? 'Borrowed' : 'Returned',
-                        style: const TextStyle(
-                          color: AppColors.heading,
-                          fontWeight: FontWeight.w600,
+                      Flexible(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            color: AppColors.heading,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                      if (!isBorrow && e.overdue) ...[
+                      if (e.type == 'return' && e.overdue) ...[
                         const SizedBox(width: 8),
                         const Text(
                           'Late',
@@ -264,6 +296,22 @@ class _HistoryCard extends StatelessWidget {
                     style: t.bodyMedium?.copyWith(color: AppColors.heading),
                   ),
                   Text(e.bookId, style: t.bodySmall),
+                  if (e.amount != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      formatPeso(e.amount!),
+                      style: const TextStyle(
+                        color: AppColors.gold,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  if ((e.detail ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(e.detail!, style: t.bodySmall),
+                  ],
+                  if (e.type == 'damage_discarded')
+                    Text('Total copies reduced by 1', style: t.bodySmall),
                   const SizedBox(height: 6),
                   Text(
                     studentLine,
@@ -271,7 +319,7 @@ class _HistoryCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: t.bodySmall,
                   ),
-                  if (isBorrow && e.dueAt != null)
+                  if (e.type == 'borrow' && e.dueAt != null)
                     Text('Due ${formatDate(e.dueAt!)}', style: t.bodySmall),
                   Text(
                     'Handled by $staff',

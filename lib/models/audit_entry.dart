@@ -79,6 +79,14 @@ String auditActionTitle(String action) {
       return 'Book returned';
     case 'reservation.cancel':
       return 'Cancelled reservation';
+    case 'fine.issue':
+      return 'Issued a fine';
+    case 'fine.paid':
+      return 'Fine marked as paid';
+    case 'book.damage_functional':
+      return 'Damaged book: still functional';
+    case 'book.damage_discarded':
+      return 'Damaged book: to be discarded';
     default:
       return action;
   }

@@ -213,6 +213,14 @@ class _AuditCard extends StatelessWidget {
         return Icons.south_west;
       case 'reservation.cancel':
         return Icons.cancel_outlined;
+      case 'fine.issue':
+        return Icons.request_quote_outlined;
+      case 'fine.paid':
+        return Icons.paid_outlined;
+      case 'book.damage_functional':
+        return Icons.build_outlined;
+      case 'book.damage_discarded':
+        return Icons.delete_sweep_outlined;
       default:
         return Icons.receipt_long_outlined;
     }

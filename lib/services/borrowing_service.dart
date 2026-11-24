@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/return_incident.dart';
+import 'fine_service.dart';
 import '../models/app_user.dart';
 import '../models/borrowing.dart';
 import '../models/history_entry.dart';
@@ -141,6 +143,13 @@ class BorrowingService {
       final reserved = ((book['reservedCopies'] ?? 0) as num).toInt();
       if (available <= 0) throw const NoFreeCopyException();
 
+      final fineSummary = (await tx.get(
+        _db.collection('fineSummaries').doc(r.studentEmail),
+      )).data();
+      if (((fineSummary?['unpaidCount'] ?? 0) as num) > 0) {
+        throw const UnpaidFineException();
+      }
+
       final now = DateTime.now();
       final due = DateTime(
         now.year,
@@ -211,9 +220,13 @@ class BorrowingService {
     }
   }
 
-  /// Book came back: stock goes up and the borrow is closed.
-  /// The QR scanner will call this same method later.
-  Future<void> returnBook(Borrowing b, {required AppUser staff}) {
+  /// Book came back: stock goes up and the borrow is closed. A fine and any
+  /// damage report from the librarian are saved in the same step.
+  Future<void> returnBook(
+    Borrowing b, {
+    required AppUser staff,
+    ReturnIncident? incident,
+  }) async {
     final borrowRef = _db.collection('borrowings').doc(b.id);
     final bookRef = _db.collection('books').doc(b.bookId);
     final resId = b.reservationId;
@@ -223,22 +236,46 @@ class BorrowingService {
     final eventRef = _db.collection('transactions').doc();
     final logRef = AuditService.instance.newRef();
 
-    return _db.runTransaction<void>((tx) async {
+    // Only an incident with a fine counts (damage always comes with one)
+    final inc = (incident != null && incident.hasFine) ? incident : null;
+    final fineRef = inc == null ? null : _db.collection('fines').doc();
+    final summaryRef = _db.collection('fineSummaries').doc(b.studentEmail);
+    final fineEventRef = _db.collection('transactions').doc();
+    final damageEventRef = _db.collection('transactions').doc();
+    final noteRef = _db.collection('notifications').doc();
+    final fineLogRef = AuditService.instance.newRef();
+    final damageLogRef = AuditService.instance.newRef();
+
+    await _db.runTransaction<void>((tx) async {
       final snap = await tx.get(borrowRef);
       if (snap.data()?['status'] != 'active') {
         throw const BorrowingChangedException();
       }
       final book = (await tx.get(bookRef)).data();
       final resSnap = resRef == null ? null : await tx.get(resRef);
+      final summary = fineRef == null
+          ? null
+          : (await tx.get(summaryRef)).data();
 
-      final late = b.dueAt != null && b.dueAt!.isBefore(DateTime.now());
+      final now = DateTime.now();
+      final due = b.dueAt;
+      final wasLate = due != null && due.isBefore(now);
+      // ignore: unnecessary_null_comparison
+      final daysLate = (wasLate && due != null) ? daysLateOf(due, now) : 0;
+      final discard = inc != null && inc.discarded;
 
       if (book != null) {
-        final available = ((book['availableCopies'] ?? 0) as num).toInt();
-        final total = ((book['totalCopies'] ?? 0) as num).toInt();
-        tx.update(bookRef, {
-          'availableCopies': available + 1 > total ? total : available + 1,
-        });
+        if (discard) {
+          // The damaged copy never goes back on the shelf
+          final total = ((book['totalCopies'] ?? 0) as num).toInt();
+          tx.update(bookRef, {'totalCopies': total > 0 ? total - 1 : 0});
+        } else {
+          final available = ((book['availableCopies'] ?? 0) as num).toInt();
+          final total = ((book['totalCopies'] ?? 0) as num).toInt();
+          tx.update(bookRef, {
+            'availableCopies': available + 1 > total ? total : available + 1,
+          });
+        }
       }
       tx.update(borrowRef, {
         'status': 'returned',
@@ -263,7 +300,7 @@ class BorrowingService {
           studentId: b.studentId,
           staff: staff,
           dueAt: b.dueAt,
-          overdue: late,
+          overdue: wasLate,
         ),
       );
       tx.set(
@@ -274,11 +311,140 @@ class BorrowingService {
           actorRole: staff.role,
           targetEmail: b.studentEmail,
           targetName: b.studentName,
-          details: late
+          details: wasLate
               ? '${b.bookId} - ${b.bookTitle}\nReturned late'
               : '${b.bookId} - ${b.bookTitle}',
         ),
       );
+
+      if (inc != null && fineRef != null) {
+        final amount = inc.fineAmount!;
+        final reason = inc.damageReason.trim();
+        final lateText =
+            'Late return ($daysLate ${daysLate == 1 ? 'day' : 'days'})';
+        final reasonText = inc.damaged
+            ? (wasLate ? '$lateText and damaged book' : 'Damaged book')
+            : lateText;
+        final condition = inc.damaged ? inc.condition : null;
+
+        tx.set(fineRef, {
+          'studentEmail': b.studentEmail,
+          'studentName': b.studentName,
+          'studentId': ?b.studentId,
+          'bookId': b.bookId,
+          'bookTitle': b.bookTitle,
+          'borrowingId': b.id,
+          'amount': amount,
+          'wasLate': wasLate,
+          'daysLate': daysLate,
+          'damaged': inc.damaged,
+          'damageReason': inc.damaged ? reason : '',
+          'condition': ?condition,
+          'hasPhoto': inc.damaged && inc.photo != null,
+          'status': 'unpaid',
+          'createdAt': FieldValue.serverTimestamp(),
+          'createdBy': staff.email,
+          'createdByName': staff.name,
+        });
+        if (inc.damaged && inc.photo != null) {
+          tx.set(_db.collection('fineEvidence').doc(fineRef.id), {
+            'data': Blob(inc.photo!),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        // The student now has an unpaid fine
+        final count = ((summary?['unpaidCount'] ?? 0) as num).toInt();
+        final total = ((summary?['unpaidTotal'] ?? 0) as num).toInt();
+        tx.set(summaryRef, {
+          'unpaidCount': count + 1,
+          'unpaidTotal': total + amount,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        tx.set(
+          noteRef,
+          FineService.noteData(
+            toEmail: b.studentEmail,
+            type: 'fine_issued',
+            title: 'You have a new fine',
+            message:
+                'You were fined ${formatPeso(amount)} for "${b.bookTitle}" ($reasonText). Please settle it at the library. Reserving and picking up books is paused until it is paid.',
+            bookId: b.bookId,
+          ),
+        );
+
+        // History + audit
+        tx.set(
+          fineEventRef,
+          FineService.eventData(
+            type: 'fine',
+            fineId: fineRef.id,
+            bookId: b.bookId,
+            bookTitle: b.bookTitle,
+            studentEmail: b.studentEmail,
+            studentName: b.studentName,
+            studentId: b.studentId,
+            staff: staff,
+            amount: amount,
+            detail: reason.isEmpty ? reasonText : '$reasonText: $reason',
+          ),
+        );
+        tx.set(
+          fineLogRef,
+          AuditService.instance.entryData(
+            action: 'fine.issue',
+            category: 'fines',
+            actorRole: staff.role,
+            targetEmail: b.studentEmail,
+            targetName: b.studentName,
+            details:
+                '${b.bookId} - ${b.bookTitle}\n${formatPeso(amount)} · $reasonText',
+          ),
+        );
+        if (inc.damaged) {
+          tx.set(
+            damageEventRef,
+            FineService.eventData(
+              type: discard ? 'damage_discarded' : 'damage_functional',
+              fineId: fineRef.id,
+              bookId: b.bookId,
+              bookTitle: b.bookTitle,
+              studentEmail: b.studentEmail,
+              studentName: b.studentName,
+              studentId: b.studentId,
+              staff: staff,
+              detail: reason,
+            ),
+          );
+          tx.set(
+            damageLogRef,
+            AuditService.instance.entryData(
+              action: discard
+                  ? 'book.damage_discarded'
+                  : 'book.damage_functional',
+              category: 'books',
+              actorRole: staff.role,
+              targetEmail: b.studentEmail,
+              targetName: b.studentName,
+              details:
+                  '${b.bookId} - ${b.bookTitle}\n$reason\n${discard ? 'Copy removed from the total copies' : 'Still functional'}',
+            ),
+          );
+        }
+      }
     });
+
+    // The fined student's pending and approved requests are dropped.
+    // Best effort: the return and the fine are already saved.
+    if (inc != null) {
+      try {
+        await ReservationService.instance.dropAllForFine(
+          studentEmail: b.studentEmail,
+          actorRole: staff.role,
+        );
+      } catch (e) {
+        debugPrint('drop for fine failed: $e');
+      }
+    }
   }
 }

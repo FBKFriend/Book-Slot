@@ -7,7 +7,7 @@ import '../models/audit_entry.dart';
 import '../utils/format.dart';
 
 // The built-in PDF font has no arrow glyph
-String _safe(String s) => s.replaceAll('→', '->');
+String _safe(String s) => s.replaceAll('→', '->').replaceAll('₱', 'PHP ');
 
 Future<Uint8List> buildAuditPdf({
   required List<AuditEntry> entries,

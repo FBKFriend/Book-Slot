@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/fine_service.dart';
 import '../../models/app_user.dart';
 import '../../models/reservation.dart';
 import '../../services/reservation_service.dart';
@@ -190,6 +191,14 @@ class _ReserveBarState extends State<_ReserveBar> {
         SnackBar(
           content: Text(
             'You can only have ${e.limit} active reservations at a time.',
+          ),
+        ),
+      );
+    } on UnpaidFineException {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'You have an unpaid fine. Please settle it at the library before reserving books.',
           ),
         ),
       );

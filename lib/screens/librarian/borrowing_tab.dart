@@ -4,6 +4,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/fine.dart';
+import '../../services/fine_service.dart';
+import 'fines_list.dart';
 import '../../models/app_user.dart';
 import '../../models/book.dart';
 import '../../models/borrowing.dart';
@@ -29,6 +32,8 @@ class _BorrowingTabState extends State<BorrowingTab> {
   late final Stream<List<Borrowing>> _borrowedStream = BorrowingService.instance
       .watchActive();
   StreamSubscription<List<Book>>? _booksSub;
+  StreamSubscription<List<Fine>>? _finesSub;
+  List<Fine> _fines = const [];
   Map<String, Book> _books = {};
   final Set<String> _busy = {};
 
@@ -39,6 +44,9 @@ class _BorrowingTabState extends State<BorrowingTab> {
       if (mounted) setState(() => _books = {for (final b in list) b.id: b});
     }, onError: (_) {});
     _expireOverdue();
+    _finesSub = FineService.instance.watchAll().listen((list) {
+      if (mounted) setState(() => _fines = list);
+    }, onError: (_) {});
   }
 
   @override
@@ -50,6 +58,7 @@ class _BorrowingTabState extends State<BorrowingTab> {
   @override
   void dispose() {
     _booksSub?.cancel();
+    _finesSub?.cancel();
     super.dispose();
   }
 
@@ -118,6 +127,12 @@ class _BorrowingTabState extends State<BorrowingTab> {
       }
     } on BorrowingChangedException {
       if (mounted) _snack('This book was already returned.');
+    } on UnpaidFineException {
+      if (mounted) {
+        _snack(
+          'This student has an unpaid fine. Deny the request or ask them to settle it first.',
+        );
+      }
     } catch (e) {
       debugPrint('action failed: $e');
       if (mounted) _snack('Something went wrong. Please try again.');
@@ -205,6 +220,7 @@ class _BorrowingTabState extends State<BorrowingTab> {
                   b.pickupDeadline ?? far,
                 ),
               );
+            final unpaidFines = _fines.where((f) => !f.isPaid).length;
 
             Widget body;
             if (resSnap.hasError || borSnap.hasError) {
@@ -235,21 +251,25 @@ class _BorrowingTabState extends State<BorrowingTab> {
                     'No books are borrowed right now',
                     (b) => _BorrowedCard(b),
                   ),
+                  FinesList(fines: _fines, user: widget.user),
                 ],
               );
             }
 
             return DefaultTabController(
-              length: 3,
+              length: 4,
               child: Scaffold(
                 appBar: AppBar(
                   title: const Text('Borrowing & Reservations'),
                   bottom: TabBar(
                     dividerColor: AppColors.border,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
                     tabs: [
                       Tab(text: 'Requests (${pending.length})'),
                       Tab(text: 'Pickup (${accepted.length})'),
                       Tab(text: 'Borrowed (${borrowed.length})'),
+                      Tab(text: 'Fines ($unpaidFines)'),
                     ],
                   ),
                 ),
