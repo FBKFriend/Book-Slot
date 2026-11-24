@@ -165,6 +165,9 @@ class _ReserveBar extends StatefulWidget {
 class _ReserveBarState extends State<_ReserveBar> {
   late final Stream<List<Reservation>> _stream = ReservationService.instance
       .watchForStudent(widget.user.email);
+  late final Stream<int> _unpaidStream = FineService.instance.watchUnpaidCount(
+    widget.user.email,
+  );
   bool _busy = false;
 
   Future<void> _reserve() async {
@@ -227,65 +230,106 @@ class _ReserveBarState extends State<_ReserveBar> {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-          child: StreamBuilder<List<Reservation>>(
-            stream: _stream,
-            builder: (context, snap) {
-              final mine = (snap.data ?? const <Reservation>[])
-                  .where(
-                    (r) =>
-                        r.bookId == widget.book.id &&
-                        (r.isActive || r.isBorrowing),
-                  )
-                  .toList();
-              final active = mine.isEmpty ? null : mine.first;
+          child: StreamBuilder<int>(
+            stream: _unpaidStream,
+            builder: (context, fineSnap) {
+              final hasUnpaidFine = (fineSnap.data ?? 0) > 0;
+              return StreamBuilder<List<Reservation>>(
+                stream: _stream,
+                builder: (context, snap) {
+                  final mine = (snap.data ?? const <Reservation>[])
+                      .where(
+                        (r) =>
+                            r.bookId == widget.book.id &&
+                            (r.isActive || r.isBorrowing),
+                      )
+                      .toList();
+                  final active = mine.isEmpty ? null : mine.first;
 
-              var label = 'Reserve';
-              String? note;
-              var enabled = snap.hasData;
+                  var label = 'Reserve';
+                  String? note;
+                  var finePaused = false;
+                  var enabled = snap.hasData;
 
-              if (snap.hasError) {
-                enabled = false;
-                note = 'Could not check your reservations.';
-              } else if (active != null && active.isBorrowing) {
-                enabled = false;
-                label = 'Borrowed';
-                note = active.dueAt == null
-                    ? 'You are currently borrowing this book.'
-                    : 'You are borrowing this book. Due ${formatDate(active.dueAt!)}.';
-              } else if (active != null && active.status == 'accepted') {
-                enabled = false;
-                label = 'Reserved';
-                note = active.pickupDeadline == null
-                    ? 'Approved. Please pick it up at the library.'
-                    : 'Approved. Pick it up by ${formatDate(active.pickupDeadline!)}.';
-              } else if (active != null) {
-                enabled = false;
-                label = 'Reservation pending';
-                note = 'Waiting for the librarian to respond.';
-              } else if (widget.book.availableCopies == 0) {
-                enabled = false;
-                label = 'Unavailable';
-                note = 'All copies are currently borrowed.';
-              }
+                  if (snap.hasError) {
+                    enabled = false;
+                    note = 'Could not check your reservations.';
+                  } else if (active != null && active.isBorrowing) {
+                    enabled = false;
+                    label = 'Borrowed';
+                    note = active.dueAt == null
+                        ? 'You are currently borrowing this book.'
+                        : 'You are borrowing this book. Due ${formatDate(active.dueAt!)}.';
+                  } else if (active != null && active.status == 'accepted') {
+                    enabled = false;
+                    label = 'Reserved';
+                    note = active.pickupDeadline == null
+                        ? 'Approved. Please pick it up at the library.'
+                        : 'Approved. Pick it up by ${formatDate(active.pickupDeadline!)}.';
+                  } else if (active != null) {
+                    enabled = false;
+                    label = 'Reservation pending';
+                    note = 'Waiting for the librarian to respond.';
+                  } else if (hasUnpaidFine) {
+                    enabled = false;
+                    finePaused = true;
+                    label = 'Reserve';
+                    note = 'You have an unpaid fine. Settle it at the library to reserve books. You can see it in Alerts > Fines.';
+                  } else if (widget.book.availableCopies == 0) {
+                    enabled = false;
+                    label = 'Unavailable';
+                    note = 'All copies are currently borrowed.';
+                  }
 
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ElevatedButton(
-                    onPressed: (enabled && !_busy) ? _reserve : null,
-                    child: _busy
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(label),
-                  ),
-                  if (note != null) ...[
-                    const SizedBox(height: 6),
-                    Text(note, textAlign: TextAlign.center, style: t.bodySmall),
-                  ],
-                ],
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (finePaused) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.card,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE57373)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                size: 18,
+                                color: Color(0xFFE57373),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(child: Text(note!, style: t.bodySmall)),
+                            ],
+                          ),
+                        ),
+                      ],
+                      ElevatedButton(
+                        onPressed: (enabled && !_busy) ? _reserve : null,
+                        child: _busy
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(label),
+                      ),
+                      if (note != null && !finePaused) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          note,
+                          textAlign: TextAlign.center,
+                          style: t.bodySmall,
+                        ),
+                      ],
+                    ],
+                  );
+                },
               );
             },
           ),

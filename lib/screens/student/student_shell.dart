@@ -35,7 +35,7 @@ class _StudentShellState extends State<StudentShell> {
           MenuTab(user: widget.user),
           SearchTab(user: widget.user),
           LibraryTab(user: widget.user),
-          AlertsTab(notes: notes, hasError: snap.hasError),
+          AlertsTab(user: widget.user, notes: notes, hasError: snap.hasError),
           StudentSettingsTab(user: widget.user),
         ];
         return Scaffold(
